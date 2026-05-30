@@ -1,0 +1,45 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id          Int          @id @default(autoincrement())
+  username    String       @unique
+  password    String
+  role        String       @default("MAHASISWA") // ADMIN or MAHASISWA
+  name        String
+  npm         String?      @unique
+  kelas       String?      // e.g., "MI 4A", "MI 4B", null for ADMIN
+  attendances Attendance[]
+}
+
+model Attendance {
+  id_absensi    Int       @id @default(autoincrement())
+  userId        Int
+  user          User      @relation(fields: [userId], references: [id])
+  tanggal       DateTime  @default(now())
+  jam_absen     DateTime  @default(now())
+  status        String    // 'HADIR' or 'TERLAMBAT'
+  latitude      Float
+  longitude     Float
+  alamat_lokasi String?
+  device_info   String?
+  ip_address    String?
+  foto_selfie   String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+}
+
+model Settings {
+  id    Int    @id @default(autoincrement())
+  key   String @unique
+  value String
+}

@@ -1,0 +1,5 @@
+node_modules/
+uploads/selfies/*
+!uploads/selfies/.gitkeep
+data/*.db
+.env
