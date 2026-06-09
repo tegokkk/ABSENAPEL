@@ -3,6 +3,9 @@ import axios from 'axios';
 import ExcelJS from 'exceljs';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
 
 const API = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api`;
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -11,6 +14,14 @@ const headers = () => ({ Authorization: `Bearer ${token()}` });
 
 const CLASSES = ['MI 4A', 'MI 4B', 'MI 4C', 'MI 4D'];
 
+// Fix Leaflet default icon
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
 // ============================================================
 // MODAL KOMPONEN
 // ============================================================
@@ -18,8 +29,8 @@ function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-        <div className="flex justify-between items-center mb-5">
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-5 sticky top-0 bg-white z-10 pb-2 border-b border-slate-100">
           <h3 className="text-lg font-bold text-slate-800">{title}</h3>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-all">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -34,34 +45,48 @@ function Modal({ title, onClose, children }) {
 }
 
 // ============================================================
+// STATUS BADGE HELPER
+// ============================================================
+const getStatusBadge = (status, admin_action) => {
+  if (status === 'PENDING') {
+    if (admin_action === 'REJECTED') {
+      return { bg: 'bg-red-100 text-red-700 border border-red-200', label: 'Ditolak' };
+    }
+    return { bg: 'bg-amber-100 text-amber-700 border border-amber-200', label: 'Pending' };
+  }
+  if (status === 'TERLAMBAT') return { bg: 'bg-orange-100 text-orange-700 border border-orange-200', label: 'Terlambat' };
+  return { bg: 'bg-emerald-100 text-emerald-700 border border-emerald-200', label: 'Hadir' };
+};
+
+const getValidasiBadge = (validasi) => {
+  if (validasi === 'VALID') return { bg: 'bg-emerald-50 text-emerald-600 border border-emerald-100', label: 'Valid' };
+  if (validasi === 'DI_LUAR_RADIUS') return { bg: 'bg-red-50 text-red-600 border border-red-100', label: 'Luar Radius' };
+  return { bg: 'bg-amber-50 text-amber-600 border border-amber-100', label: 'Mencurigakan' };
+};
+
+// ============================================================
 // TAB ABSENSI
 // ============================================================
 function TabAbsensi() {
   const [attendances, setAttendances] = useState([]);
-  const [stats, setStats] = useState({ totalToday: 0, hadir: 0, terlambat: 0, byKelas: {} });
   const [selectedKelas, setSelectedKelas] = useState('');
+  const [filterValidasi, setFilterValidasi] = useState('Semua');
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(null);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
 
   useEffect(() => {
-    fetchAttendances(selectedKelas);
-    fetchStats();
-  }, [selectedKelas]);
+    fetchAttendances(selectedKelas, filterValidasi);
+  }, [selectedKelas, filterValidasi]);
 
-  const fetchAttendances = async (kelas) => {
+  const fetchAttendances = async (kelas, validasi) => {
     try {
-      let url = `${API}/attendance`;
-      if (kelas && kelas !== 'Semua Kelas') url += `?kelas=${encodeURIComponent(kelas)}`;
+      let url = `${API}/attendance?`;
+      if (kelas && kelas !== 'Semua Kelas') url += `kelas=${encodeURIComponent(kelas)}&`;
+      if (validasi && validasi !== 'Semua') url += `validasi=${encodeURIComponent(validasi)}`;
+      
       const res = await axios.get(url, { headers: headers() });
       setAttendances(res.data);
-    } catch {}
-  };
-
-  const fetchStats = async () => {
-    try {
-      const res = await axios.get(`${API}/attendance/stats`, { headers: headers() });
-      setStats(res.data);
     } catch {}
   };
 
@@ -70,8 +95,7 @@ function TabAbsensi() {
     setDeleting(id);
     try {
       await axios.delete(`${API}/attendance/${id}`, { headers: headers() });
-      fetchAttendances(selectedKelas);
-      fetchStats();
+      fetchAttendances(selectedKelas, filterValidasi);
     } catch (err) {
       alert(err.response?.data?.error || 'Gagal menghapus');
     } finally {
@@ -94,9 +118,14 @@ function TabAbsensi() {
         { header: 'Tanggal', key: 'tanggal', width: 15 },
         { header: 'Waktu Absen', key: 'jam_absen', width: 15 },
         { header: 'Status', key: 'status', width: 12 },
+        { header: 'Validasi', key: 'validasi', width: 20 },
+        { header: 'Akurasi GPS (m)', key: 'accuracy', width: 15 },
+        { header: 'Jarak (m)', key: 'jarak', width: 15 },
         { header: 'Latitude', key: 'lat', width: 15 },
         { header: 'Longitude', key: 'lng', width: 15 },
-        { header: 'Perangkat', key: 'device', width: 30 }
+        { header: 'IP Address', key: 'ip', width: 15 },
+        { header: 'Browser & Platform', key: 'device', width: 25 },
+        { header: 'Catatan Admin', key: 'admin_note', width: 30 }
       ];
 
       sheet.getRow(1).eachCell(cell => {
@@ -114,11 +143,19 @@ function TabAbsensi() {
           tanggal: new Date(a.tanggal).toLocaleDateString('id-ID'),
           jam_absen: a.jam_absen ? new Date(a.jam_absen).toLocaleTimeString('id-ID') : '-',
           status: a.status,
+          validasi: a.validasi_lokasi,
+          accuracy: a.accuracy !== null ? a.accuracy.toFixed(2) : '-',
+          jarak: a.jarak_dari_titik !== null ? a.jarak_dari_titik.toFixed(2) : '-',
           lat: a.latitude,
           lng: a.longitude,
-          device: a.device_info ? a.device_info.substring(0, 50) : '-'
+          ip: a.ip_address || '-',
+          device: `${a.browser || '-'} / ${a.platform || '-'}`,
+          admin_note: a.admin_note || '-'
         });
         if (a.status === 'TERLAMBAT') {
+          row.getCell('status').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+          row.getCell('status').font = { color: { argb: 'FFD97706' }, bold: true };
+        } else if (a.status === 'PENDING') {
           row.getCell('status').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
           row.getCell('status').font = { color: { argb: 'FFD97706' }, bold: true };
         } else {
@@ -168,17 +205,18 @@ function TabAbsensi() {
       const tableData = attendances.map((a, i) => [
         i + 1,
         a.user.name,
-        a.user.npm || '-',
         a.user.kelas || '-',
         new Date(a.tanggal).toLocaleDateString('id-ID'),
         a.jam_absen ? new Date(a.jam_absen).toLocaleTimeString('id-ID') : '-',
-        a.status === 'TERLAMBAT' ? 'Terlambat' : 'Hadir',
-        a.latitude ? `${a.latitude.toFixed(4)}, ${a.longitude.toFixed(4)}` : '-'
+        a.status === 'TERLAMBAT' ? 'Terlambat' : a.status === 'PENDING' ? 'Pending' : 'Hadir',
+        a.validasi_lokasi === 'VALID' ? 'Valid' : 'Suspect',
+        a.jarak_dari_titik !== null ? `${a.jarak_dari_titik.toFixed(1)}m` : '-',
+        a.accuracy !== null ? `±${a.accuracy.toFixed(1)}m` : '-'
       ]);
 
       autoTable(doc, {
         startY: 35,
-        head: [['No', 'Nama Mahasiswa', 'NPM', 'Kelas', 'Tanggal', 'Waktu Absen', 'Status', 'Koordinat']],
+        head: [['No', 'Nama Mahasiswa', 'Kelas', 'Tanggal', 'Waktu Absen', 'Status', 'Validasi', 'Jarak', 'Akurasi GPS']],
         body: tableData,
         styles: {
           fontSize: 8,
@@ -197,17 +235,18 @@ function TabAbsensi() {
         },
         columnStyles: {
           0: { halign: 'center', cellWidth: 10 },
-          1: { cellWidth: 55 },
-          2: { halign: 'center', cellWidth: 25 },
-          3: { halign: 'center', cellWidth: 20 },
-          4: { halign: 'center', cellWidth: 30 },
-          5: { halign: 'center', cellWidth: 25 },
+          1: { cellWidth: 50 },
+          2: { halign: 'center', cellWidth: 20 },
+          3: { halign: 'center', cellWidth: 30 },
+          4: { halign: 'center', cellWidth: 25 },
+          5: { halign: 'center', cellWidth: 22 },
           6: { halign: 'center', cellWidth: 22 },
-          7: { halign: 'center', cellWidth: 40 },
+          7: { halign: 'center', cellWidth: 20 },
+          8: { halign: 'center', cellWidth: 25 },
         },
         didParseCell: (data) => {
-          if (data.section === 'body' && data.column.index === 6) {
-            if (data.cell.raw === 'Terlambat') {
+          if (data.section === 'body' && data.column.index === 5) {
+            if (data.cell.raw === 'Terlambat' || data.cell.raw === 'Pending') {
               data.cell.styles.textColor = [217, 119, 6];
               data.cell.styles.fontStyle = 'bold';
             } else {
@@ -237,54 +276,47 @@ function TabAbsensi() {
   };
 
   return (
-    <div className="space-y-5">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-sky-500 to-blue-600 p-4 rounded-2xl text-white">
-          <p className="text-sky-100 text-xs font-medium mb-1">Total Absen Hari Ini</p>
-          <p className="text-3xl font-bold">{stats.totalToday}</p>
-        </div>
-        <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-4 rounded-2xl text-white">
-          <p className="text-emerald-100 text-xs font-medium mb-1">Hadir Tepat Waktu</p>
-          <p className="text-3xl font-bold">{stats.hadir}</p>
-        </div>
-        <div className="bg-gradient-to-br from-orange-500 to-amber-500 p-4 rounded-2xl text-white">
-          <p className="text-orange-100 text-xs font-medium mb-1">Terlambat</p>
-          <p className="text-3xl font-bold">{stats.terlambat}</p>
-        </div>
-        <div className="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm">
-          <p className="text-slate-400 text-xs font-medium mb-1">Per Kelas Hari Ini</p>
-          <div className="space-y-1">
-            {CLASSES.map(k => (
-              <div key={k} className="flex justify-between text-xs">
-                <span className="text-slate-500">{k}</span>
-                <span className="font-bold text-slate-700">{stats.byKelas?.[k] ?? 0}</span>
-              </div>
+    <div className="space-y-4">
+      {/* Toolbar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-wrap gap-3 items-center justify-between">
+        <div className="flex flex-wrap gap-2 items-center">
+          <div className="flex bg-slate-100 rounded-xl p-1">
+            {['Semua Kelas', ...CLASSES].map(k => (
+              <button
+                key={k}
+                onClick={() => setSelectedKelas(k === 'Semua Kelas' ? '' : k)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  (selectedKelas === '' && k === 'Semua Kelas') || selectedKelas === k
+                    ? 'bg-white text-sky-700 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {k}
+              </button>
+            ))}
+          </div>
+          
+          <div className="h-6 w-px bg-slate-200 mx-1"></div>
+
+          <div className="flex bg-slate-100 rounded-xl p-1">
+            {['Semua', 'VALID', 'MENCURIGAKAN'].map(v => (
+              <button
+                key={v}
+                onClick={() => setFilterValidasi(v)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  filterValidasi === v
+                    ? 'bg-white text-sky-700 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {v === 'Semua' ? 'Semua Status' : v === 'VALID' ? 'Valid' : 'Mencurigakan'}
+              </button>
             ))}
           </div>
         </div>
-      </div>
-
-      {/* Toolbar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-wrap gap-3 items-center justify-between">
-        <div className="flex flex-wrap gap-2">
-          {['Semua Kelas', ...CLASSES].map(k => (
-            <button
-              key={k}
-              onClick={() => setSelectedKelas(k === 'Semua Kelas' ? '' : k)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                (selectedKelas === '' && k === 'Semua Kelas') || selectedKelas === k
-                  ? 'bg-sky-600 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {k}
-            </button>
-          ))}
-        </div>
+        
         <div className="flex gap-2">
           <button
-            id="btn-export-excel"
             onClick={exportExcel}
             disabled={loading}
             className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm disabled:opacity-50"
@@ -292,10 +324,9 @@ function TabAbsensi() {
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
-            {loading ? 'Memproses...' : 'Excel'}
+            Excel
           </button>
           <button
-            id="btn-export-pdf"
             onClick={exportPDF}
             className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm"
           >
@@ -314,76 +345,94 @@ function TabAbsensi() {
             <thead className="bg-slate-50 border-b border-slate-100 text-xs text-slate-500 uppercase tracking-wide">
               <tr>
                 <th className="px-4 py-3">No</th>
-                <th className="px-4 py-3">Nama & NPM</th>
-                <th className="px-4 py-3">Kelas</th>
-                <th className="px-4 py-3">Tanggal</th>
-                <th className="px-4 py-3">Jam Absen</th>
+                <th className="px-4 py-3">Mahasiswa</th>
+                <th className="px-4 py-3">Waktu</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Validasi</th>
+                <th className="px-4 py-3">GPS Data</th>
                 <th className="px-4 py-3">Foto</th>
-                <th className="px-4 py-3">Koordinat</th>
                 <th className="px-4 py-3">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {attendances.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan="8" className="px-4 py-12 text-center text-slate-400">
                     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="mx-auto mb-2 text-slate-200">
                       <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
                     </svg>
                     Belum ada data absensi.
                   </td>
                 </tr>
-              ) : attendances.map((a, i) => (
-                <tr key={a.id_absensi} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-4 py-3 text-slate-400 text-xs">{i + 1}</td>
-                  <td className="px-4 py-3">
-                    <div className="font-semibold text-slate-800">{a.user.name}</div>
-                    <div className="text-xs font-mono text-slate-400">{a.user.npm || '-'}</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="px-2 py-0.5 bg-sky-50 text-sky-700 rounded-lg text-xs font-semibold border border-sky-100">
-                      {a.user.kelas || '-'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600 text-xs">
-                    {new Date(a.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-600">
-                    {a.jam_absen ? new Date(a.jam_absen).toLocaleTimeString('id-ID') : '-'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${a.status === 'TERLAMBAT'
-                      ? 'bg-orange-100 text-orange-700'
-                      : 'bg-emerald-100 text-emerald-700'
-                    }`}>
-                      {a.status === 'TERLAMBAT' ? 'Terlambat' : 'Hadir'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {a.foto_selfie ? (
-                      <img
-                        src={`${BASE_URL}${a.foto_selfie}`}
-                        alt="Selfie"
-                        className="w-10 h-10 rounded-xl object-cover border-2 border-slate-200 cursor-pointer hover:border-sky-400 hover:scale-110 transition-all shadow-sm"
-                        onClick={() => setSelectedPhoto(`${BASE_URL}${a.foto_selfie}`)}
-                      />
-                    ) : <span className="text-slate-300 text-xs">—</span>}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-400">
-                    {a.latitude?.toFixed(4)}, {a.longitude?.toFixed(4)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => handleDelete(a.id_absensi)}
-                      disabled={deleting === a.id_absensi}
-                      className="px-2.5 py-1.5 text-xs text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-all font-medium disabled:opacity-50"
-                    >
-                      {deleting === a.id_absensi ? '...' : 'Hapus'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              ) : attendances.map((a, i) => {
+                const sBadge = getStatusBadge(a.status, a.admin_action);
+                const vBadge = getValidasiBadge(a.validasi_lokasi);
+                
+                return (
+                  <tr key={a.id_absensi} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-4 py-3 text-slate-400 text-xs">{i + 1}</td>
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-slate-800">{a.user.name}</div>
+                      <div className="flex gap-2 items-center mt-1">
+                        <span className="text-xs font-mono text-slate-400">{a.user.npm || '-'}</span>
+                        <span className="px-1.5 py-0.5 bg-sky-50 text-sky-700 rounded text-[10px] font-bold border border-sky-100">
+                          {a.user.kelas || '-'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-slate-600 text-xs font-medium">
+                        {new Date(a.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </div>
+                      <div className="font-mono text-xs text-slate-500 mt-1">
+                        {a.jam_absen ? new Date(a.jam_absen).toLocaleTimeString('id-ID') : '-'}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${sBadge.bg}`}>
+                        {sBadge.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-0.5 rounded-lg text-[11px] font-medium ${vBadge.bg}`}>
+                        {vBadge.label}
+                      </span>
+                      {a.alasan_flag && (
+                        <div className="text-[10px] text-red-500 mt-1 max-w-[120px] truncate" title={a.alasan_flag}>
+                          {a.alasan_flag}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-[11px] text-slate-500">
+                        Akurasi: <span className="font-mono font-medium">{a.accuracy !== null ? `±${a.accuracy.toFixed(1)}m` : '-'}</span>
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        Jarak: <span className="font-mono font-medium">{a.jarak_dari_titik !== null ? `${a.jarak_dari_titik.toFixed(1)}m` : '-'}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {a.foto_selfie ? (
+                        <img
+                          src={`${BASE_URL}${a.foto_selfie}`}
+                          alt="Selfie"
+                          className="w-10 h-10 rounded-xl object-cover border-2 border-slate-200 cursor-pointer hover:border-sky-400 hover:scale-110 transition-all shadow-sm"
+                          onClick={() => setSelectedPhoto(`${BASE_URL}${a.foto_selfie}`)}
+                        />
+                      ) : <span className="text-slate-300 text-xs">—</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => handleDelete(a.id_absensi)}
+                        disabled={deleting === a.id_absensi}
+                        className="px-2.5 py-1.5 text-xs text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-all font-medium disabled:opacity-50"
+                      >
+                        {deleting === a.id_absensi ? '...' : 'Hapus'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -393,6 +442,194 @@ function TabAbsensi() {
       {selectedPhoto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setSelectedPhoto(null)}>
           <img src={selectedPhoto} alt="Selfie" className="max-w-sm max-h-[80vh] rounded-2xl shadow-2xl border-4 border-white" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// TAB VERIFIKASI (PENDING)
+// ============================================================
+function TabVerifikasi({ onVerified }) {
+  const [pending, setPending] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [actionModal, setActionModal] = useState(null); // { id, type: 'APPROVED'|'REJECTED', name }
+  const [note, setNote] = useState('');
+
+  useEffect(() => {
+    fetchPending();
+  }, []);
+
+  const fetchPending = async () => {
+    try {
+      const res = await axios.get(`${API}/attendance/pending`, { headers: headers() });
+      setPending(res.data);
+    } catch {}
+  };
+
+  const handleAction = async () => {
+    if (!actionModal) return;
+    setLoading(true);
+    try {
+      await axios.put(`${API}/attendance/${actionModal.id}/verify`, {
+        action: actionModal.type,
+        note
+      }, { headers: headers() });
+      
+      setActionModal(null);
+      setNote('');
+      fetchPending();
+      if (onVerified) onVerified(); // Update stats
+    } catch (err) {
+      alert(err.response?.data?.error || 'Gagal memproses verifikasi');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex gap-3 items-start">
+        <div className="mt-0.5 text-amber-500">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-amber-800 font-semibold text-sm">Verifikasi Manual Diperlukan</h3>
+          <p className="text-amber-700 text-xs mt-1">
+            Data absensi di bawah ini ditandai sebagai mencurigakan (kemungkinan Fake GPS atau sinyal tidak akurat). Silakan tinjau dan putuskan apakah absensi disetujui atau ditolak.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {pending.length === 0 ? (
+          <div className="col-span-full bg-white border border-slate-100 rounded-2xl p-12 text-center">
+            <div className="w-16 h-16 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+            <h3 className="font-bold text-slate-700">Antrian Kosong</h3>
+            <p className="text-slate-400 text-sm mt-1">Semua absensi telah diverifikasi.</p>
+          </div>
+        ) : pending.map(p => (
+          <div key={p.id_absensi} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-slate-100">
+              <div className="flex justify-between items-start mb-2">
+                <div>
+                  <h4 className="font-bold text-slate-800">{p.user.name}</h4>
+                  <p className="text-xs text-slate-500 font-mono">{p.user.npm} • {p.user.kelas}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-semibold text-slate-600">{new Date(p.tanggal).toLocaleDateString('id-ID')}</p>
+                  <p className="text-xs font-mono text-slate-500">{new Date(p.jam_absen).toLocaleTimeString('id-ID')}</p>
+                </div>
+              </div>
+              <div className="bg-red-50 text-red-600 text-[11px] font-medium p-2 rounded-lg border border-red-100 mt-3">
+                <span className="block font-bold mb-1">Penyebab Flag:</span>
+                {p.alasan_flag || 'Tidak diketahui'}
+              </div>
+            </div>
+
+            <div className="p-4 flex-1 flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <p className="text-slate-400 mb-0.5">Akurasi GPS</p>
+                  <p className="font-medium text-slate-700">{p.accuracy !== null ? `±${p.accuracy.toFixed(1)}m` : 'Tidak tersedia'}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 mb-0.5">Jarak ke Titik</p>
+                  <p className="font-medium text-slate-700">{p.jarak_dari_titik !== null ? `${p.jarak_dari_titik.toFixed(1)}m` : 'Tidak tersedia'}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-slate-400 mb-0.5">Device / Browser</p>
+                  <p className="font-medium text-slate-700 truncate" title={p.device_info}>{p.browser || 'Unknown'} / {p.platform || 'Unknown'} <span className="text-slate-400 ml-1">({p.ip_address || 'IP Unknown'})</span></p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-auto">
+                {p.foto_selfie && (
+                  <img 
+                    src={`${BASE_URL}${p.foto_selfie}`} 
+                    alt="Selfie" 
+                    className="w-16 h-16 rounded-xl object-cover cursor-pointer border border-slate-200"
+                    onClick={() => setSelectedPhoto(`${BASE_URL}${p.foto_selfie}`)}
+                  />
+                )}
+                {p.latitude && p.longitude && (
+                  <div className="flex-1 h-16 rounded-xl overflow-hidden border border-slate-200 z-0">
+                    <MapContainer center={[p.latitude, p.longitude]} zoom={15} style={{ height: '100%', width: '100%' }} zoomControl={false} dragging={false}>
+                      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                      <Marker position={[p.latitude, p.longitude]} />
+                    </MapContainer>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 border-t border-slate-100 flex gap-2">
+              <button 
+                onClick={() => setActionModal({ id: p.id_absensi, type: 'REJECTED', name: p.user.name })}
+                className="flex-1 py-2 bg-white border border-red-200 text-red-600 rounded-xl text-sm font-semibold hover:bg-red-50 transition-all"
+              >
+                Tolak
+              </button>
+              <button 
+                onClick={() => setActionModal({ id: p.id_absensi, type: 'APPROVED', name: p.user.name })}
+                className="flex-1 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-all shadow-sm"
+              >
+                Setujui
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Action Modal */}
+      {actionModal && (
+        <Modal 
+          title={actionModal.type === 'APPROVED' ? 'Setujui Absensi' : 'Tolak Absensi'} 
+          onClose={() => { setActionModal(null); setNote(''); }}
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              Anda akan <strong className={actionModal.type === 'APPROVED' ? 'text-emerald-600' : 'text-red-600'}>
+                {actionModal.type === 'APPROVED' ? 'MENYETUJUI' : 'MENOLAK'}
+              </strong> absensi milik <strong>{actionModal.name}</strong>.
+            </p>
+            
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Catatan (Opsional)</label>
+              <textarea 
+                value={note} 
+                onChange={e => setNote(e.target.value)}
+                placeholder={actionModal.type === 'APPROVED' ? "Misal: Sinyal memang sedang buruk..." : "Misal: Terdeteksi Fake GPS..."}
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 outline-none resize-none h-24" 
+              />
+            </div>
+            
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setActionModal(null)} className="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 text-sm">Batal</button>
+              <button 
+                onClick={handleAction} 
+                disabled={loading}
+                className={`flex-1 py-2.5 text-white rounded-xl font-semibold transition-all text-sm disabled:opacity-50 ${actionModal.type === 'APPROVED' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}
+              >
+                {loading ? 'Memproses...' : actionModal.type === 'APPROVED' ? 'Ya, Setujui' : 'Ya, Tolak'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Photo Lightbox */}
+      {selectedPhoto && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={() => setSelectedPhoto(null)}>
+          <img src={selectedPhoto} alt="Selfie" className="max-w-[90vw] max-h-[90vh] rounded-2xl shadow-2xl border-4 border-white" />
         </div>
       )}
     </div>
@@ -700,11 +937,27 @@ function TabSettings() {
 // ============================================================
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('absensi');
+  const [stats, setStats] = useState({ totalToday: 0, hadir: 0, terlambat: 0, pending: 0, mencurigakan: 0, byKelas: {}, totalPending: 0 });
+
+  useEffect(() => {
+    fetchStats();
+  }, [activeTab]); // Refresh stats when tab changes
+
+  const fetchStats = async () => {
+    try {
+      const res = await axios.get(`${API}/attendance/stats`, { headers: headers() });
+      setStats(res.data);
+    } catch {}
+  };
 
   const tabs = [
     {
       id: 'absensi', label: 'Data Absensi',
       icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    },
+    {
+      id: 'verifikasi', label: 'Verifikasi', badge: stats.totalPending,
+      icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
     },
     {
       id: 'users', label: 'Manajemen Mahasiswa',
@@ -718,9 +971,11 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="bg-gradient-to-br from-sky-600 to-blue-700 p-6 rounded-2xl text-white shadow-lg">
-        <div className="flex items-center gap-3">
+      {/* Header & Stats */}
+      <div className="bg-gradient-to-br from-sky-600 to-blue-700 p-6 rounded-2xl text-white shadow-lg relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3" />
+        
+        <div className="flex items-center gap-3 mb-6 relative z-10">
           <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
@@ -731,16 +986,36 @@ export default function AdminDashboard() {
             <p className="text-sky-200 text-sm">Smart Attendance — Manajemen Informatika</p>
           </div>
         </div>
+
+        {/* Stats Grid Hari Ini */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
+          <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/10">
+            <p className="text-sky-200 text-xs font-medium mb-0.5">Total Absen</p>
+            <p className="text-2xl font-bold">{stats.totalToday}</p>
+          </div>
+          <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/10">
+            <p className="text-emerald-300 text-xs font-medium mb-0.5">Hadir Tepat</p>
+            <p className="text-2xl font-bold text-emerald-100">{stats.hadir}</p>
+          </div>
+          <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/10">
+            <p className="text-amber-300 text-xs font-medium mb-0.5">Pending Review</p>
+            <p className="text-2xl font-bold text-amber-100">{stats.pending}</p>
+          </div>
+          <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/10">
+            <p className="text-orange-300 text-xs font-medium mb-0.5">Mencurigakan</p>
+            <p className="text-2xl font-bold text-orange-100">{stats.mencurigakan}</p>
+          </div>
+        </div>
       </div>
 
       {/* Tab Navigation */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-1.5 flex gap-1">
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-1.5 flex flex-wrap gap-1">
         {tabs.map(tab => (
           <button
             key={tab.id}
             id={`tab-${tab.id}`}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold transition-all ${
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 sm:px-4 rounded-xl text-sm font-semibold transition-all ${
               activeTab === tab.id
                 ? 'bg-sky-600 text-white shadow-sm'
                 : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
@@ -748,6 +1023,11 @@ export default function AdminDashboard() {
           >
             {tab.icon}
             <span className="hidden sm:inline">{tab.label}</span>
+            {tab.badge > 0 && (
+              <span className={`ml-1 px-1.5 py-0.5 text-[10px] rounded-full ${activeTab === tab.id ? 'bg-white text-sky-600' : 'bg-amber-100 text-amber-700'}`}>
+                {tab.badge}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -755,6 +1035,7 @@ export default function AdminDashboard() {
       {/* Tab Content */}
       <div>
         {activeTab === 'absensi' && <TabAbsensi />}
+        {activeTab === 'verifikasi' && <TabVerifikasi onVerified={fetchStats} />}
         {activeTab === 'users' && <TabUsers />}
         {activeTab === 'settings' && <TabSettings />}
       </div>

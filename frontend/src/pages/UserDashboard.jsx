@@ -15,6 +15,26 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
+// Helper: Parse browser & platform dari userAgent
+function parseBrowserInfo() {
+  const ua = navigator.userAgent;
+  let browser = 'Unknown';
+  if (ua.includes('Firefox/')) browser = 'Firefox';
+  else if (ua.includes('Edg/')) browser = 'Edge';
+  else if (ua.includes('OPR/') || ua.includes('Opera/')) browser = 'Opera';
+  else if (ua.includes('Chrome/')) browser = 'Chrome';
+  else if (ua.includes('Safari/')) browser = 'Safari';
+
+  let platform = 'Unknown';
+  if (/Android/i.test(ua)) platform = 'Android';
+  else if (/iPhone|iPad|iPod/i.test(ua)) platform = 'iOS';
+  else if (/Windows/i.test(ua)) platform = 'Windows';
+  else if (/Mac/i.test(ua)) platform = 'macOS';
+  else if (/Linux/i.test(ua)) platform = 'Linux';
+
+  return { browser, platform };
+}
+
 export default function UserDashboard({ user }) {
   const [location, setLocation] = useState(null);
   const [locationError, setLocationError] = useState('');
@@ -57,11 +77,12 @@ export default function UserDashboard({ user }) {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
           accuracy: position.coords.accuracy,
+          timestamp: position.timestamp,   // Timestamp GPS
         });
         setLocationError('');
       },
       () => setLocationError('Gagal mendapatkan lokasi. Pastikan izin lokasi aktif.'),
-      { enableHighAccuracy: true }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
 
@@ -95,9 +116,15 @@ export default function UserDashboard({ user }) {
     setLoading(true);
     setMessage({ type: '', text: '' });
     try {
+      const { browser, platform } = parseBrowserInfo();
+
       const formData = new FormData();
       formData.append('latitude', location.lat);
       formData.append('longitude', location.lng);
+      formData.append('accuracy', location.accuracy ?? '');
+      formData.append('gps_timestamp', location.timestamp ?? '');
+      formData.append('browser', browser);
+      formData.append('platform', platform);
       formData.append('device_info', navigator.userAgent);
       formData.append('foto_selfie', dataURLtoFile(imgSrc, 'selfie.jpg'));
 
@@ -109,12 +136,19 @@ export default function UserDashboard({ user }) {
       });
 
       const status = res.data.status;
-      setMessage({
-        type: 'success',
-        text: status === 'TERLAMBAT'
-          ? 'Absen berhasil dicatat, namun Anda TERLAMBAT.'
-          : 'Absen Apel berhasil! Tepat waktu.'
-      });
+      if (status === 'PENDING') {
+        setMessage({
+          type: 'warning',
+          text: res.data.warning || 'Absensi Anda masuk antrian verifikasi admin. Silakan tunggu persetujuan.'
+        });
+      } else {
+        setMessage({
+          type: 'success',
+          text: status === 'TERLAMBAT'
+            ? 'Absen berhasil dicatat, namun Anda TERLAMBAT.'
+            : 'Absen Apel berhasil! Tepat waktu.'
+        });
+      }
       fetchAttendances();
       setImgSrc(null);
     } catch (err) {
@@ -133,6 +167,22 @@ export default function UserDashboard({ user }) {
   });
 
   const officeCoord = [settings.OFFICE_LAT, settings.OFFICE_LON];
+
+  // Status badge color helper
+  const getStatusBadge = (status, validasi) => {
+    if (status === 'PENDING') return { bg: 'bg-amber-100 text-amber-700 border border-amber-200', label: 'Menunggu Verifikasi' };
+    if (status === 'TERLAMBAT') return { bg: 'bg-orange-100 text-orange-700 border border-orange-200', label: 'Terlambat' };
+    return { bg: 'bg-emerald-100 text-emerald-700 border border-emerald-200', label: 'Hadir' };
+  };
+
+  const getTodayBadge = () => {
+    if (!todayRecord) return null;
+    if (todayRecord.status === 'PENDING') return { bg: 'bg-amber-400/30 text-amber-100', label: 'Menunggu Verifikasi' };
+    if (todayRecord.status === 'TERLAMBAT') return { bg: 'bg-orange-400/30 text-orange-100', label: 'Terlambat' };
+    return { bg: 'bg-green-400/30 text-green-100', label: 'Hadir Hari Ini' };
+  };
+
+  const todayBadge = getTodayBadge();
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -153,9 +203,9 @@ export default function UserDashboard({ user }) {
               <span className="px-3 py-1 bg-white/20 rounded-full text-xs font-semibold backdrop-blur-sm">
                 {user.kelas || '-'}
               </span>
-              {todayRecord && (
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold backdrop-blur-sm ${todayRecord.status === 'TERLAMBAT' ? 'bg-orange-400/30 text-orange-100' : 'bg-green-400/30 text-green-100'}`}>
-                  {todayRecord.status === 'TERLAMBAT' ? 'Terlambat' : 'Hadir Hari Ini'}
+              {todayBadge && (
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold backdrop-blur-sm ${todayBadge.bg}`}>
+                  {todayBadge.label}
                 </span>
               )}
             </div>
@@ -213,9 +263,13 @@ export default function UserDashboard({ user }) {
           <h2 className="text-base font-bold mb-4 text-slate-800">Aksi Absensi</h2>
 
           {message.text && (
-            <div className={`p-3 rounded-xl mb-4 text-sm flex items-start gap-2 ${message.type === 'error'
-              ? 'bg-red-50 text-red-700 border border-red-100'
-              : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
+            <div className={`p-3 rounded-xl mb-4 text-sm flex items-start gap-2 ${
+              message.type === 'error'
+                ? 'bg-red-50 text-red-700 border border-red-100'
+                : message.type === 'warning'
+                ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+            }`}>
               {message.text}
             </div>
           )}
@@ -254,6 +308,18 @@ export default function UserDashboard({ user }) {
             <p className="text-xs text-slate-400 text-center mt-2">
               Batas tepat waktu: <span className="font-semibold text-slate-600">{settings.BATAS_TERLAMBAT} WIB</span>
             </p>
+          )}
+
+          {/* Info accuracy */}
+          {location && (
+            <div className="mt-3 p-2.5 bg-slate-50 rounded-xl">
+              <p className="text-xs text-slate-500">
+                Akurasi GPS: <span className={`font-semibold ${location.accuracy > 100 ? 'text-red-600' : location.accuracy > 50 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  {location.accuracy ? `±${location.accuracy.toFixed(0)}m` : 'N/A'}
+                </span>
+                {location.accuracy > 100 && <span className="text-red-500 ml-1">(terlalu rendah, mungkin masuk verifikasi)</span>}
+              </p>
+            </div>
           )}
         </div>
       </div>
@@ -342,13 +408,14 @@ export default function UserDashboard({ user }) {
                   <th className="px-4 py-3 font-semibold rounded-tl-xl">Tanggal</th>
                   <th className="px-4 py-3 font-semibold">Waktu Absen</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold">Validasi</th>
                   <th className="px-4 py-3 font-semibold rounded-tr-xl">Foto</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {attendances.length === 0 ? (
                   <tr>
-                    <td colSpan="4" className="px-4 py-10 text-center text-slate-400">
+                    <td colSpan="5" className="px-4 py-10 text-center text-slate-400">
                       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-2 text-slate-200">
                         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
                       </svg>
@@ -356,37 +423,48 @@ export default function UserDashboard({ user }) {
                     </td>
                   </tr>
                 ) : (
-                  attendances.map(a => (
-                    <tr key={a.id_absensi} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-4 py-3 font-medium text-slate-700">
-                        {new Date(a.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-slate-600 text-xs">
-                        {a.jam_absen ? new Date(a.jam_absen).toLocaleTimeString('id-ID') : '-'}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${a.status === 'TERLAMBAT'
-                          ? 'bg-orange-100 text-orange-700 border border-orange-200'
-                          : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                        }`}>
-                          {a.status === 'TERLAMBAT' ? 'Terlambat' : 'Hadir'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {a.foto_selfie ? (
-                          <a href={`${API_URL}${a.foto_selfie}`} target="_blank" rel="noopener noreferrer">
-                            <img
-                              src={`${API_URL}${a.foto_selfie}`}
-                              alt="Selfie"
-                              className="w-10 h-10 rounded-xl object-cover border-2 border-slate-200 hover:border-sky-400 hover:scale-110 transition-all cursor-pointer shadow-sm"
-                            />
-                          </a>
-                        ) : (
-                          <span className="text-slate-300 text-xs">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                  attendances.map(a => {
+                    const badge = getStatusBadge(a.status, a.validasi_lokasi);
+                    return (
+                      <tr key={a.id_absensi} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-4 py-3 font-medium text-slate-700">
+                          {new Date(a.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-slate-600 text-xs">
+                          {a.jam_absen ? new Date(a.jam_absen).toLocaleTimeString('id-ID') : '-'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${badge.bg}`}>
+                            {badge.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          {a.validasi_lokasi === 'VALID' ? (
+                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-medium border border-emerald-100">Valid</span>
+                          ) : a.admin_action === 'APPROVED' ? (
+                            <span className="px-2 py-0.5 bg-sky-50 text-sky-600 rounded-lg text-xs font-medium border border-sky-100">Disetujui</span>
+                          ) : a.admin_action === 'REJECTED' ? (
+                            <span className="px-2 py-0.5 bg-red-50 text-red-600 rounded-lg text-xs font-medium border border-red-100">Ditolak</span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-lg text-xs font-medium border border-amber-100">Review</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {a.foto_selfie ? (
+                            <a href={`${API_URL}${a.foto_selfie}`} target="_blank" rel="noopener noreferrer">
+                              <img
+                                src={`${API_URL}${a.foto_selfie}`}
+                                alt="Selfie"
+                                className="w-10 h-10 rounded-xl object-cover border-2 border-slate-200 hover:border-sky-400 hover:scale-110 transition-all cursor-pointer shadow-sm"
+                              />
+                            </a>
+                          ) : (
+                            <span className="text-slate-300 text-xs">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

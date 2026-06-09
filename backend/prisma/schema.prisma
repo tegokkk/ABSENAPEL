@@ -22,20 +22,30 @@ model User {
 }
 
 model Attendance {
-  id_absensi    Int       @id @default(autoincrement())
-  userId        Int
-  user          User      @relation(fields: [userId], references: [id])
-  tanggal       DateTime  @default(now())
-  jam_absen     DateTime  @default(now())
-  status        String    // 'HADIR' or 'TERLAMBAT'
-  latitude      Float
-  longitude     Float
-  alamat_lokasi String?
-  device_info   String?
-  ip_address    String?
-  foto_selfie   String?
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @updatedAt
+  id_absensi       Int       @id @default(autoincrement())
+  userId           Int
+  user             User      @relation(fields: [userId], references: [id])
+  tanggal          DateTime  @default(now())
+  jam_absen        DateTime  @default(now())
+  status           String    // 'HADIR', 'TERLAMBAT', 'PENDING'
+  latitude         Float
+  longitude        Float
+  alamat_lokasi    String?
+  device_info      String?
+  ip_address       String?
+  foto_selfie      String?
+  // === Anti-Fake GPS Fields ===
+  accuracy         Float?    // GPS accuracy dalam meter
+  gps_timestamp    Float?    // Timestamp GPS dari device (ms since epoch)
+  jarak_dari_titik Float?    // Jarak user dari titik apel (meter)
+  browser          String?   // Nama browser
+  platform         String?   // Platform/OS (Android, iOS, Windows, dll)
+  validasi_lokasi  String    @default("VALID") // VALID, DI_LUAR_RADIUS, GPS_TIDAK_AKURAT, LOKASI_MENCURIGAKAN, KEMUNGKINAN_FAKE_GPS, PENDING_VERIFIKASI
+  alasan_flag      String?   // Alasan detail kenapa dicurigai (comma-separated flags)
+  admin_action     String?   // APPROVED / REJECTED / null
+  admin_note       String?   // Catatan admin saat approve/reject
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
 }
 
 model Settings {
