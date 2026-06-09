@@ -11,14 +11,10 @@
       "use": "@vercel/node"
     }
   ],
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/backend/index.js"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/backend/index.js" },
+    { "src": "/assets/(.*)", "dest": "/frontend/assets/$1" },
+    { "src": "/vite.svg", "dest": "/frontend/vite.svg" },
+    { "src": "/(.*)", "dest": "/frontend/index.html" }
   ]
 }
