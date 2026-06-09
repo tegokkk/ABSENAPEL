@@ -2,26 +2,27 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "watch": ["backend/**"],
+    "watchPatterns": ["api/**"],
     "nixpacksPlan": {
       "phases": {
         "setup": {
-          "nixPkgs": ["nodejs_20", "sqlite"]
+          "nixPkgs": ["nodejs_20"]
         },
         "install": {
-          "cmds": ["cd backend && npm install"]
+          "cmds": ["cd api && npm install"]
         },
         "build": {
-          "cmds": ["cd backend && npm run build"]
+          "cmds": ["cd api && npx prisma generate"]
         }
       },
       "start": {
-        "cmd": "cd backend && npm start"
+        "cmd": "cd api && node index.js"
       }
     }
   },
   "deploy": {
     "numReplicas": 1,
-    "restartPolicyType": "ON_FAILURE"
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
   }
 }

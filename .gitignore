@@ -12,6 +12,19 @@ dist
 dist-ssr
 *.local
 
+# Environment variables — JANGAN di-commit ke Git!
+.env
+.env.local
+.env.production
+api/.env
+
+# Database file lokal
+api/prisma/dev.db
+api/prisma/*.db-journal
+
+# Upload files lokal
+api/uploads/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

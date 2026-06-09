@@ -10,9 +10,29 @@ const fs = require("fs");
 const prisma = new PrismaClient();
 const app = express();
 const PORT = process.env.PORT || 5000;
-const SECRET_KEY = "smartattendance_timdis_2024";
+const SECRET_KEY = process.env.JWT_SECRET || "smartattendance_timdis_2024";
 
-app.use(cors());
+// =============================================
+// CORS — Izinkan frontend (Vercel) & lokal dev
+// =============================================
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  process.env.FRONTEND_URL,
+].filter(Boolean);
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Izinkan request tanpa origin (Postman, curl, mobile app)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS: " + origin));
+    }
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
