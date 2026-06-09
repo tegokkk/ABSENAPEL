@@ -7,11 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "postinstall": "prisma generate --schema=./prisma/schema.prisma"
-  },
-  "prisma": {
-    "schema": "./prisma/schema.prisma"
+    "preview": "vite preview"
   },
   "dependencies": {
     "axios": "^1.16.1",
