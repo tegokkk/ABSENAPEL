@@ -935,15 +935,6 @@ app.get("/", (req, res) => {
   res.send("Smart Attendance API Running");
 });
 
-app.all('*', (req, res) => {
-  res.json({
-    message: "Debug Vercel Routing",
-    path: req.path,
-    url: req.url,
-    originalUrl: req.originalUrl
-  });
-});
-
 app.listen(PORT, () => {
   console.log(`Server Smart Attendance berjalan di port ${PORT}`);
 });
