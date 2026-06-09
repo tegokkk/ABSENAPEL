@@ -946,6 +946,6 @@ app.get("/", (req, res) => {
   res.send("Smart Attendance API Running");
 });
 
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, () => {
   console.log(`Server Smart Attendance berjalan di port ${PORT}`);
 });
