@@ -12,7 +12,7 @@
     }
   ],
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/backend/index.js" },
+    { "source": "/api/(.*)", "destination": "/backend/index" },
     { "source": "/assets/(.*)", "destination": "/frontend/assets/$1" },
     { "source": "/vite.svg", "destination": "/frontend/vite.svg" },
     { "source": "/(.*)", "destination": "/frontend/index.html" }
