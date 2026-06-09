@@ -567,7 +567,7 @@ app.get('/api/seed', async (req, res) => {
     }
 
     res.json({
-      message: `✅ Seed berhasil! Dibuat: 2 admin (TIMDIS1, TIMDIS2) + ${students.length} mahasiswa dari 4 kelas.`,
+      message: `Seed berhasil! Dibuat: 2 admin (TIMDIS1, TIMDIS2) + ${students.length} mahasiswa dari 4 kelas.`,
       detail: {
         admins: 2,
         mahasiswa: students.length,
@@ -581,5 +581,5 @@ app.get('/api/seed', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server Smart Attendance berjalan di http://localhost:${PORT}`);
+  console.log(`Server Smart Attendance berjalan di http://localhost:${PORT}`);
 });

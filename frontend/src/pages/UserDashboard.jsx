@@ -112,8 +112,8 @@ export default function UserDashboard({ user }) {
       setMessage({
         type: 'success',
         text: status === 'TERLAMBAT'
-          ? '⚠️ Absen berhasil dicatat, namun Anda TERLAMBAT.'
-          : '✅ Absen Apel berhasil! Tepat waktu.'
+          ? 'Absen berhasil dicatat, namun Anda TERLAMBAT.'
+          : 'Absen Apel berhasil! Tepat waktu.'
       });
       fetchAttendances();
       setImgSrc(null);
@@ -151,11 +151,11 @@ export default function UserDashboard({ user }) {
             <p className="text-sky-100 text-sm mt-1">NPM: <span className="font-mono font-semibold text-white">{user.npm || '-'}</span></p>
             <div className="mt-3 flex gap-2 flex-wrap">
               <span className="px-3 py-1 bg-white/20 rounded-full text-xs font-semibold backdrop-blur-sm">
-                🎓 {user.kelas || '-'}
+                {user.kelas || '-'}
               </span>
               {todayRecord && (
                 <span className={`px-3 py-1 rounded-full text-xs font-semibold backdrop-blur-sm ${todayRecord.status === 'TERLAMBAT' ? 'bg-orange-400/30 text-orange-100' : 'bg-green-400/30 text-green-100'}`}>
-                  {todayRecord.status === 'TERLAMBAT' ? '⚠️ Terlambat' : '✅ Hadir Hari Ini'}
+                  {todayRecord.status === 'TERLAMBAT' ? 'Terlambat' : 'Hadir Hari Ini'}
                 </span>
               )}
             </div>
@@ -203,7 +203,7 @@ export default function UserDashboard({ user }) {
               onClick={() => setImgSrc(null)}
               className="w-full py-2.5 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-all text-sm"
             >
-              🔄 Ulangi Foto
+              Ulangi Foto
             </button>
           )}
         </div>
@@ -277,13 +277,13 @@ export default function UserDashboard({ user }) {
               onClick={getLocation}
               className="text-xs text-sky-600 font-semibold hover:text-sky-700 bg-sky-50 px-3 py-1.5 rounded-lg transition-all"
             >
-              🔄 Perbarui
+              Perbarui
             </button>
           </div>
 
           {locationError && (
             <div className="mb-3 p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">
-              ⚠️ {locationError}
+              {locationError}
             </div>
           )}
 
@@ -292,11 +292,11 @@ export default function UserDashboard({ user }) {
               <MapContainer center={[location.lat, location.lng]} zoom={16} style={{ height: '100%', width: '100%' }}>
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 <Marker position={[location.lat, location.lng]}>
-                  <Popup>📍 Lokasi Anda</Popup>
+                  <Popup>Lokasi Anda</Popup>
                 </Marker>
                 <Circle center={officeCoord} pathOptions={{ color: '#0284c7', fillColor: '#0284c7', fillOpacity: 0.15 }} radius={settings.MAX_RADIUS} />
                 <Marker position={officeCoord}>
-                  <Popup>🏫 Lokasi Apel</Popup>
+                  <Popup>Lokasi Apel</Popup>
                 </Marker>
               </MapContainer>
             ) : (
@@ -369,7 +369,7 @@ export default function UserDashboard({ user }) {
                           ? 'bg-orange-100 text-orange-700 border border-orange-200'
                           : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                         }`}>
-                          {a.status === 'TERLAMBAT' ? '⚠️ Terlambat' : '✅ Hadir'}
+                          {a.status === 'TERLAMBAT' ? 'Terlambat' : 'Hadir'}
                         </span>
                       </td>
                       <td className="px-4 py-3">

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import ExcelJS from 'exceljs';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const API = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api`;
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -141,6 +143,99 @@ function TabAbsensi() {
     }
   };
 
+  const exportPDF = () => {
+    try {
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const filterLabel = !selectedKelas || selectedKelas === 'Semua Kelas' ? 'Semua Kelas' : selectedKelas;
+      const today = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+
+      // Header
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Rekap Absensi Mahasiswa', 148, 15, { align: 'center' });
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Smart Attendance - Manajemen Informatika`, 148, 22, { align: 'center' });
+      doc.setFontSize(9);
+      doc.text(`Kelas: ${filterLabel}  |  Tanggal Cetak: ${today}`, 148, 28, { align: 'center' });
+
+      // Garis pemisah
+      doc.setDrawColor(2, 132, 199);
+      doc.setLineWidth(0.5);
+      doc.line(14, 31, 283, 31);
+
+      // Tabel
+      const tableData = attendances.map((a, i) => [
+        i + 1,
+        a.user.name,
+        a.user.npm || '-',
+        a.user.kelas || '-',
+        new Date(a.tanggal).toLocaleDateString('id-ID'),
+        a.jam_absen ? new Date(a.jam_absen).toLocaleTimeString('id-ID') : '-',
+        a.status === 'TERLAMBAT' ? 'Terlambat' : 'Hadir',
+        a.latitude ? `${a.latitude.toFixed(4)}, ${a.longitude.toFixed(4)}` : '-'
+      ]);
+
+      autoTable(doc, {
+        startY: 35,
+        head: [['No', 'Nama Mahasiswa', 'NPM', 'Kelas', 'Tanggal', 'Waktu Absen', 'Status', 'Koordinat']],
+        body: tableData,
+        styles: {
+          fontSize: 8,
+          cellPadding: 3,
+          lineColor: [226, 232, 240],
+          lineWidth: 0.1,
+        },
+        headStyles: {
+          fillColor: [2, 132, 199],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          halign: 'center',
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 252],
+        },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 10 },
+          1: { cellWidth: 55 },
+          2: { halign: 'center', cellWidth: 25 },
+          3: { halign: 'center', cellWidth: 20 },
+          4: { halign: 'center', cellWidth: 30 },
+          5: { halign: 'center', cellWidth: 25 },
+          6: { halign: 'center', cellWidth: 22 },
+          7: { halign: 'center', cellWidth: 40 },
+        },
+        didParseCell: (data) => {
+          if (data.section === 'body' && data.column.index === 6) {
+            if (data.cell.raw === 'Terlambat') {
+              data.cell.styles.textColor = [217, 119, 6];
+              data.cell.styles.fontStyle = 'bold';
+            } else {
+              data.cell.styles.textColor = [5, 150, 105];
+              data.cell.styles.fontStyle = 'bold';
+            }
+          }
+        },
+        margin: { left: 14, right: 14 },
+      });
+
+      // Footer
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(7);
+        doc.setTextColor(148, 163, 184);
+        doc.text(`Halaman ${i} dari ${pageCount}`, 283, 200, { align: 'right' });
+        doc.text(`Dicetak oleh Smart Attendance`, 14, 200);
+      }
+
+      const fname = !selectedKelas || selectedKelas === 'Semua Kelas' ? 'Semua_Kelas' : selectedKelas.replace(' ', '_');
+      doc.save(`absensi_${fname}_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch {
+      alert('Gagal mengexport PDF');
+    }
+  };
+
   return (
     <div className="space-y-5">
       {/* Stats Cards */}
@@ -187,17 +282,29 @@ function TabAbsensi() {
             </button>
           ))}
         </div>
-        <button
-          id="btn-export-excel"
-          onClick={exportExcel}
-          disabled={loading}
-          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm disabled:opacity-50"
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          {loading ? 'Memproses...' : 'Export Excel'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            id="btn-export-excel"
+            onClick={exportExcel}
+            disabled={loading}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm disabled:opacity-50"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            {loading ? 'Memproses...' : 'Excel'}
+          </button>
+          <button
+            id="btn-export-pdf"
+            onClick={exportPDF}
+            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+            </svg>
+            PDF
+          </button>
+        </div>
       </div>
 
       {/* Tabel */}
@@ -250,7 +357,7 @@ function TabAbsensi() {
                       ? 'bg-orange-100 text-orange-700'
                       : 'bg-emerald-100 text-emerald-700'
                     }`}>
-                      {a.status === 'TERLAMBAT' ? '⚠️ Terlambat' : '✅ Hadir'}
+                      {a.status === 'TERLAMBAT' ? 'Terlambat' : 'Hadir'}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -340,10 +447,10 @@ function TabUsers() {
     try {
       if (editUser) {
         await axios.put(`${API}/users/${editUser.id}`, form, { headers: headers() });
-        setActionMsg('✅ Data mahasiswa berhasil diperbarui');
+        setActionMsg('Data mahasiswa berhasil diperbarui');
       } else {
         await axios.post(`${API}/users`, form, { headers: headers() });
-        setActionMsg('✅ Mahasiswa berhasil ditambahkan');
+        setActionMsg('Mahasiswa berhasil ditambahkan');
       }
       setShowModal(false);
       fetchUsers();
@@ -359,7 +466,7 @@ function TabUsers() {
     if (!confirm(`Hapus mahasiswa "${user.name}"?\nSeluruh data absensinya juga akan dihapus.`)) return;
     try {
       await axios.delete(`${API}/users/${user.id}`, { headers: headers() });
-      setActionMsg('✅ Mahasiswa berhasil dihapus');
+      setActionMsg('Mahasiswa berhasil dihapus');
       fetchUsers();
       setTimeout(() => setActionMsg(''), 3000);
     } catch (err) {
@@ -371,7 +478,7 @@ function TabUsers() {
     if (!confirm(`Reset password "${user.name}" ke NPM (${user.npm})?`)) return;
     try {
       const res = await axios.put(`${API}/users/${user.id}/reset-password`, {}, { headers: headers() });
-      setActionMsg(`✅ ${res.data.message}`);
+      setActionMsg(res.data.message);
       setTimeout(() => setActionMsg(''), 3000);
     } catch (err) {
       alert(err.response?.data?.error || 'Gagal reset password');
@@ -521,7 +628,7 @@ function TabSettings() {
     setLoading(true); setMsg(''); setError('');
     try {
       const res = await axios.put(`${API}/settings`, form, { headers: headers() });
-      setMsg('✅ ' + res.data.message);
+      setMsg(res.data.message);
       setTimeout(() => setMsg(''), 4000);
     } catch (err) {
       setError(err.response?.data?.error || 'Gagal menyimpan pengaturan');
@@ -534,7 +641,7 @@ function TabSettings() {
     <div className="max-w-2xl">
       <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-6">
         <div>
-          <h3 className="font-bold text-slate-800 text-base mb-1">📍 Lokasi Titik Apel</h3>
+          <h3 className="font-bold text-slate-800 text-base mb-1">Lokasi Titik Apel</h3>
           <p className="text-sm text-slate-400">Koordinat lokasi tempat mahasiswa harus berada saat absen.</p>
         </div>
         <div className="grid grid-cols-2 gap-4">
@@ -550,7 +657,7 @@ function TabSettings() {
           </div>
         </div>
         <div className="border-t border-slate-100 pt-5">
-          <h3 className="font-bold text-slate-800 text-base mb-1">📏 Radius Absen</h3>
+          <h3 className="font-bold text-slate-800 text-base mb-1">Radius Absen</h3>
           <p className="text-sm text-slate-400 mb-4">Jarak maksimal mahasiswa dari titik apel agar absen diterima.</p>
           <div className="flex items-center gap-3">
             <input type="number" min="10" max="5000" value={form.MAX_RADIUS} onChange={e => setForm({ ...form, MAX_RADIUS: e.target.value })}
@@ -559,7 +666,7 @@ function TabSettings() {
           </div>
         </div>
         <div className="border-t border-slate-100 pt-5">
-          <h3 className="font-bold text-slate-800 text-base mb-1">⏰ Batas Jam Tepat Waktu</h3>
+          <h3 className="font-bold text-slate-800 text-base mb-1">Batas Jam Tepat Waktu</h3>
           <p className="text-sm text-slate-400 mb-4">Mahasiswa yang absen setelah jam ini akan dicatat sebagai TERLAMBAT.</p>
           <div className="flex items-center gap-3">
             <input type="time" value={form.BATAS_TERLAMBAT} onChange={e => setForm({ ...form, BATAS_TERLAMBAT: e.target.value })}
@@ -573,12 +680,12 @@ function TabSettings() {
           <button onClick={fetchSettings} className="px-5 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-all text-sm">Reset</button>
           <button id="btn-save-settings" onClick={handleSave} disabled={loading}
             className="px-6 py-2.5 bg-sky-600 text-white rounded-xl font-semibold hover:bg-sky-700 transition-all text-sm shadow-sm disabled:opacity-50">
-            {loading ? 'Menyimpan...' : '💾 Simpan Pengaturan'}
+            {loading ? 'Menyimpan...' : 'Simpan Pengaturan'}
           </button>
         </div>
       </div>
       <div className="mt-4 p-4 bg-sky-50 border border-sky-100 rounded-2xl">
-        <p className="text-sm text-sky-700 font-medium">⚠️ Catatan Penting</p>
+        <p className="text-sm text-sky-700 font-medium">Catatan Penting</p>
         <p className="text-xs text-sky-600 mt-1">
           Perubahan koordinat dan radius langsung berlaku untuk absensi berikutnya.
           Pastikan koordinat sudah benar sebelum menyimpan. Gunakan Google Maps untuk mendapatkan koordinat yang tepat.

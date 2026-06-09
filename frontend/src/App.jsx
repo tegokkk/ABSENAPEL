@@ -55,7 +55,7 @@ function App() {
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-semibold text-slate-700">{user.name}</p>
                 <p className="text-xs text-slate-400">
-                  {user.role === 'ADMIN' ? '👑 Administrator' : `🎓 ${user.kelas || 'Mahasiswa'}`}
+                  {user.role === 'ADMIN' ? 'Administrator' : `${user.kelas || 'Mahasiswa'}`}
                 </p>
               </div>
               <button
