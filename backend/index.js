@@ -769,8 +769,10 @@ app.get("/api/seed", async (req, res) => {
 
     for (const admin of admins) {
       const hashedPw = await bcrypt.hash(admin.password, 10);
-      await prisma.user.create({
-        data: {
+      await prisma.user.upsert({
+        where: { username: admin.username },
+        update: {},
+        create: {
           username: admin.username,
           password: hashedPw,
           name: admin.name,
@@ -901,8 +903,10 @@ app.get("/api/seed", async (req, res) => {
 
     for (const student of students) {
       const hashedPw = await bcrypt.hash(student.npm, 10);
-      await prisma.user.create({
-        data: {
+      await prisma.user.upsert({
+        where: { username: student.name },
+        update: {},
+        create: {
           username: student.name,
           password: hashedPw,
           name: student.name,
@@ -929,6 +933,15 @@ app.get("/api/seed", async (req, res) => {
 
 app.get("/", (req, res) => {
   res.send("Smart Attendance API Running");
+});
+
+app.all('*', (req, res) => {
+  res.json({
+    message: "Debug Vercel Routing",
+    path: req.path,
+    url: req.url,
+    originalUrl: req.originalUrl
+  });
 });
 
 app.listen(PORT, () => {
