@@ -5,7 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import Webcam from 'react-webcam';
 import L from 'leaflet';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 // Fix Leaflet default icon
 delete L.Icon.Default.prototype._getIconUrl;
@@ -97,12 +97,7 @@ export default function UserDashboard({ user }) {
     fetchSettings();
   }, []);
 
-  const dataURLtoFile = (dataurl, filename) => {
-    let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
-      bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
-    while (n--) u8arr[n] = bstr.charCodeAt(n);
-    return new File([u8arr], filename, { type: mime });
-  };
+
 
   const handleAbsenApel = async () => {
     if (!location) {
@@ -118,20 +113,21 @@ export default function UserDashboard({ user }) {
     try {
       const { browser, platform } = parseBrowserInfo();
 
-      const formData = new FormData();
-      formData.append('latitude', location.lat);
-      formData.append('longitude', location.lng);
-      formData.append('accuracy', location.accuracy ?? '');
-      formData.append('gps_timestamp', location.timestamp ?? '');
-      formData.append('browser', browser);
-      formData.append('platform', platform);
-      formData.append('device_info', navigator.userAgent);
-      formData.append('foto_selfie', dataURLtoFile(imgSrc, 'selfie.jpg'));
+      const payload = {
+        latitude: location.lat,
+        longitude: location.lng,
+        accuracy: location.accuracy ?? null,
+        gps_timestamp: location.timestamp ?? null,
+        browser,
+        platform,
+        device_info: navigator.userAgent,
+        foto_selfie: imgSrc,
+      };
 
-      const res = await axios.post(`${API_URL}/api/attendance/apel`, formData, {
+      const res = await axios.post(`${API_URL}/api/attendance/apel`, payload, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'multipart/form-data'
+          'Content-Type': 'application/json'
         }
       });
 
@@ -451,9 +447,9 @@ export default function UserDashboard({ user }) {
                         </td>
                         <td className="px-4 py-3">
                           {a.foto_selfie ? (
-                            <a href={`${API_URL}${a.foto_selfie}`} target="_blank" rel="noopener noreferrer">
+                            <a href={a.foto_selfie} target="_blank" rel="noopener noreferrer">
                               <img
-                                src={`${API_URL}${a.foto_selfie}`}
+                                src={a.foto_selfie}
                                 alt="Selfie"
                                 className="w-10 h-10 rounded-xl object-cover border-2 border-slate-200 hover:border-sky-400 hover:scale-110 transition-all cursor-pointer shadow-sm"
                               />

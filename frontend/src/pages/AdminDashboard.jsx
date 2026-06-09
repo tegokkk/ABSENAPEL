@@ -7,8 +7,8 @@ import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-const API = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api`;
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = `${import.meta.env.VITE_API_URL || ''}/api`;
+const BASE_URL = import.meta.env.VITE_API_URL || '';
 const token = () => localStorage.getItem('token');
 const headers = () => ({ Authorization: `Bearer ${token()}` });
 
@@ -415,10 +415,10 @@ function TabAbsensi() {
                     <td className="px-4 py-3">
                       {a.foto_selfie ? (
                         <img
-                          src={`${BASE_URL}${a.foto_selfie}`}
+                          src={a.foto_selfie}
                           alt="Selfie"
                           className="w-10 h-10 rounded-xl object-cover border-2 border-slate-200 cursor-pointer hover:border-sky-400 hover:scale-110 transition-all shadow-sm"
-                          onClick={() => setSelectedPhoto(`${BASE_URL}${a.foto_selfie}`)}
+                          onClick={() => setSelectedPhoto(a.foto_selfie)}
                         />
                       ) : <span className="text-slate-300 text-xs">—</span>}
                     </td>
@@ -555,10 +555,10 @@ function TabVerifikasi({ onVerified }) {
               <div className="flex gap-3 mt-auto">
                 {p.foto_selfie && (
                   <img 
-                    src={`${BASE_URL}${p.foto_selfie}`} 
+                    src={p.foto_selfie} 
                     alt="Selfie" 
                     className="w-16 h-16 rounded-xl object-cover cursor-pointer border border-slate-200"
-                    onClick={() => setSelectedPhoto(`${BASE_URL}${p.foto_selfie}`)}
+                    onClick={() => setSelectedPhoto(p.foto_selfie)}
                   />
                 )}
                 {p.latitude && p.longitude && (
