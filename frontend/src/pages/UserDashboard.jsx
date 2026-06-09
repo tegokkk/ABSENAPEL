@@ -51,12 +51,6 @@ export default function UserDashboard({ user }) {
     if (imageSrc) setImgSrc(imageSrc);
   }, [webcamRef]);
 
-  useEffect(() => {
-    fetchAttendances();
-    getLocation();
-    fetchSettings();
-  }, []);
-
   const fetchSettings = async () => {
     try {
       const res = await axios.get(`${API_URL}/api/settings`, {
@@ -96,6 +90,12 @@ export default function UserDashboard({ user }) {
       console.error('Failed to fetch attendance', err);
     }
   };
+
+  useEffect(() => {
+    fetchAttendances();
+    getLocation();
+    fetchSettings();
+  }, []);
 
   const dataURLtoFile = (dataurl, filename) => {
     let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],

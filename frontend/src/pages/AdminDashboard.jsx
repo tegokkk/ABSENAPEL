@@ -75,10 +75,6 @@ function TabAbsensi() {
   const [deleting, setDeleting] = useState(null);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
 
-  useEffect(() => {
-    fetchAttendances(selectedKelas, filterValidasi);
-  }, [selectedKelas, filterValidasi]);
-
   const fetchAttendances = async (kelas, validasi) => {
     try {
       let url = `${API}/attendance?`;
@@ -89,6 +85,11 @@ function TabAbsensi() {
       setAttendances(res.data);
     } catch {}
   };
+
+  useEffect(() => {
+    fetchAttendances(selectedKelas, filterValidasi);
+  }, [selectedKelas, filterValidasi]);
+
 
   const handleDelete = async (id) => {
     if (!confirm('Yakin ingin menghapus data absensi ini?')) return;
@@ -458,16 +459,16 @@ function TabVerifikasi({ onVerified }) {
   const [actionModal, setActionModal] = useState(null); // { id, type: 'APPROVED'|'REJECTED', name }
   const [note, setNote] = useState('');
 
-  useEffect(() => {
-    fetchPending();
-  }, []);
-
   const fetchPending = async () => {
     try {
       const res = await axios.get(`${API}/attendance/pending`, { headers: headers() });
       setPending(res.data);
     } catch {}
   };
+
+  useEffect(() => {
+    fetchPending();
+  }, []);
 
   const handleAction = async () => {
     if (!actionModal) return;
@@ -649,8 +650,6 @@ function TabUsers() {
   const [formLoading, setFormLoading] = useState(false);
   const [actionMsg, setActionMsg] = useState('');
 
-  useEffect(() => { fetchUsers(); }, [filterKelas]);
-
   const fetchUsers = async () => {
     try {
       let url = `${API}/users`;
@@ -659,6 +658,8 @@ function TabUsers() {
       setUsers(res.data);
     } catch {}
   };
+
+  useEffect(() => { fetchUsers(); }, [filterKelas]);
 
   const openAdd = () => {
     setEditUser(null);
@@ -852,14 +853,14 @@ function TabSettings() {
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
 
-  useEffect(() => { fetchSettings(); }, []);
-
   const fetchSettings = async () => {
     try {
       const res = await axios.get(`${API}/settings`, { headers: headers() });
       setForm({ OFFICE_LAT: res.data.OFFICE_LAT, OFFICE_LON: res.data.OFFICE_LON, MAX_RADIUS: res.data.MAX_RADIUS, BATAS_TERLAMBAT: res.data.BATAS_TERLAMBAT });
     } catch {}
   };
+
+  useEffect(() => { fetchSettings(); }, []);
 
   const handleSave = async () => {
     setLoading(true); setMsg(''); setError('');
@@ -939,16 +940,16 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('absensi');
   const [stats, setStats] = useState({ totalToday: 0, hadir: 0, terlambat: 0, pending: 0, mencurigakan: 0, byKelas: {}, totalPending: 0 });
 
-  useEffect(() => {
-    fetchStats();
-  }, [activeTab]); // Refresh stats when tab changes
-
   const fetchStats = async () => {
     try {
       const res = await axios.get(`${API}/attendance/stats`, { headers: headers() });
       setStats(res.data);
     } catch {}
   };
+
+  useEffect(() => {
+    fetchStats();
+  }, [activeTab]); // Refresh stats when tab changes
 
   const tabs = [
     {
