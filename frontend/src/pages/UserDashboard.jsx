@@ -4,6 +4,8 @@ import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import Webcam from 'react-webcam';
 import L from 'leaflet';
+import { useDebounceCallback, useButtonGuard } from '../hooks/useDebounce';
+
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -46,6 +48,9 @@ export default function UserDashboard({ user }) {
   const webcamRef = useRef(null);
   const [imgSrc, setImgSrc] = useState(null);
 
+  // Guard: cegah double-absen
+  const [absenLocked, guardAbsen] = useButtonGuard(3000);
+
   const capture = useCallback(() => {
     const imageSrc = webcamRef.current?.getScreenshot();
     if (imageSrc) setImgSrc(imageSrc);
@@ -60,7 +65,7 @@ export default function UserDashboard({ user }) {
     } catch {}
   };
 
-  const getLocation = () => {
+  const _getLocationRaw = () => {
     if (!navigator.geolocation) {
       setLocationError('Geolocation tidak didukung oleh browser ini.');
       return;
@@ -79,6 +84,9 @@ export default function UserDashboard({ user }) {
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
+
+  // Debounce 800ms — cegah spam klik Perbarui Lokasi
+  const getLocation = useDebounceCallback(_getLocationRaw, 800);
 
   const fetchAttendances = async () => {
     try {
@@ -99,7 +107,7 @@ export default function UserDashboard({ user }) {
 
 
 
-  const handleAbsenApel = async () => {
+  const _doAbsen = async () => {
     if (!location) {
       setMessage({ type: 'error', text: 'Lokasi belum ditemukan! Klik "Perbarui Lokasi".' });
       return;
@@ -153,6 +161,9 @@ export default function UserDashboard({ user }) {
       setLoading(false);
     }
   };
+
+  // Bungkus dengan guard 3 detik — cegah double-submit absen
+  const handleAbsenApel = guardAbsen(_doAbsen);
 
   const todayRecord = attendances.find(a => {
     const d = new Date(a.tanggal);
@@ -273,11 +284,11 @@ export default function UserDashboard({ user }) {
           <button
             id="btn-absen-apel"
             onClick={handleAbsenApel}
-            disabled={loading || !!todayRecord}
+            disabled={loading || !!todayRecord || absenLocked}
             className={`w-full py-5 rounded-2xl font-semibold text-base transition-all flex flex-col items-center gap-2 border ${todayRecord
               ? 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed'
               : 'bg-gradient-to-br from-sky-500 to-blue-600 text-white border-transparent hover:from-sky-400 hover:to-blue-500 shadow-lg shadow-sky-200'
-            } ${loading ? 'opacity-60' : ''}`}
+            } ${(loading || absenLocked) ? 'opacity-60' : ''}`}
           >
             {loading ? (
               <svg className="animate-spin w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

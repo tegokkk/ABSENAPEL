@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import ExcelJS from 'exceljs';
 import jsPDF from 'jspdf';
@@ -6,6 +6,8 @@ import autoTable from 'jspdf-autotable';
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { useDebounce, useButtonGuard } from '../hooks/useDebounce';
+
 
 const API = `${import.meta.env.VITE_API_URL || ''}/api`;
 const BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -75,20 +77,26 @@ function TabAbsensi() {
   const [deleting, setDeleting] = useState(null);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
 
-  const fetchAttendances = async (kelas, validasi) => {
+  // Debounce filter 300ms — cegah fetch berlebihan saat klik cepat
+  const debouncedKelas    = useDebounce(selectedKelas, 300);
+  const debouncedValidasi = useDebounce(filterValidasi, 300);
+
+  // Guard export agar tidak trigger berkali-kali
+  const [exportLocked, guardExport] = useButtonGuard(2000);
+
+  const fetchAttendances = useCallback(async (kelas, validasi) => {
     try {
       let url = `${API}/attendance?`;
       if (kelas && kelas !== 'Semua Kelas') url += `kelas=${encodeURIComponent(kelas)}&`;
       if (validasi && validasi !== 'Semua') url += `validasi=${encodeURIComponent(validasi)}`;
-      
       const res = await axios.get(url, { headers: headers() });
       setAttendances(res.data);
     } catch {}
-  };
+  }, []);
 
   useEffect(() => {
-    fetchAttendances(selectedKelas, filterValidasi);
-  }, [selectedKelas, filterValidasi]);
+    fetchAttendances(debouncedKelas, debouncedValidasi);
+  }, [debouncedKelas, debouncedValidasi, fetchAttendances]);
 
 
   const handleDelete = async (id) => {
@@ -96,7 +104,7 @@ function TabAbsensi() {
     setDeleting(id);
     try {
       await axios.delete(`${API}/attendance/${id}`, { headers: headers() });
-      fetchAttendances(selectedKelas, filterValidasi);
+      fetchAttendances(debouncedKelas, debouncedValidasi);
     } catch (err) {
       alert(err.response?.data?.error || 'Gagal menghapus');
     } finally {
@@ -104,7 +112,7 @@ function TabAbsensi() {
     }
   };
 
-  const exportExcel = async () => {
+  const exportExcel = guardExport(async () => {
     setLoading(true);
     try {
       const workbook = new ExcelJS.Workbook();
@@ -179,9 +187,9 @@ function TabAbsensi() {
     } finally {
       setLoading(false);
     }
-  };
+  });
 
-  const exportPDF = () => {
+  const exportPDF = guardExport(() => {
     try {
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
       const filterLabel = !selectedKelas || selectedKelas === 'Semua Kelas' ? 'Semua Kelas' : selectedKelas;
@@ -274,7 +282,7 @@ function TabAbsensi() {
     } catch {
       alert('Gagal mengexport PDF');
     }
-  };
+  });
 
   return (
     <div className="space-y-4">
@@ -459,6 +467,9 @@ function TabVerifikasi({ onVerified }) {
   const [actionModal, setActionModal] = useState(null); // { id, type: 'APPROVED'|'REJECTED', name }
   const [note, setNote] = useState('');
 
+  // Guard: cegah double-click
+  const [actionLocked, guardAction] = useButtonGuard(1500);
+
   const fetchPending = async () => {
     try {
       const res = await axios.get(`${API}/attendance/pending`, { headers: headers() });
@@ -470,7 +481,7 @@ function TabVerifikasi({ onVerified }) {
     fetchPending();
   }, []);
 
-  const handleAction = async () => {
+  const handleAction = guardAction(async () => {
     if (!actionModal) return;
     setLoading(true);
     try {
@@ -488,7 +499,7 @@ function TabVerifikasi({ onVerified }) {
     } finally {
       setLoading(false);
     }
-  };
+  });
 
   return (
     <div className="space-y-4">
@@ -650,16 +661,23 @@ function TabUsers() {
   const [formLoading, setFormLoading] = useState(false);
   const [actionMsg, setActionMsg] = useState('');
 
-  const fetchUsers = async () => {
+  // Debounce filter kelas 300ms
+  const debouncedFilterKelas = useDebounce(filterKelas, 300);
+
+  // Guard: cegah double-click pada aksi user
+  const [actionLocked, guardAction] = useButtonGuard(1500);
+
+  const fetchUsers = useCallback(async (kelas) => {
     try {
       let url = `${API}/users`;
-      if (filterKelas && filterKelas !== 'Semua Kelas') url += `?kelas=${encodeURIComponent(filterKelas)}`;
+      if (kelas && kelas !== 'Semua Kelas') url += `?kelas=${encodeURIComponent(kelas)}`;
       const res = await axios.get(url, { headers: headers() });
       setUsers(res.data);
     } catch {}
-  };
+  }, []);
 
-  useEffect(() => { fetchUsers(); }, [filterKelas]);
+  useEffect(() => { fetchUsers(debouncedFilterKelas); }, [debouncedFilterKelas, fetchUsers]);
+
 
   const openAdd = () => {
     setEditUser(null);
@@ -675,7 +693,7 @@ function TabUsers() {
     setShowModal(true);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = guardAction(async () => {
     if (!form.name || !form.npm || !form.kelas) {
       setFormError('Semua field wajib diisi');
       return;
@@ -691,28 +709,28 @@ function TabUsers() {
         setActionMsg('Mahasiswa berhasil ditambahkan');
       }
       setShowModal(false);
-      fetchUsers();
+      fetchUsers(debouncedFilterKelas);
       setTimeout(() => setActionMsg(''), 3000);
     } catch (err) {
       setFormError(err.response?.data?.error || 'Terjadi kesalahan');
     } finally {
       setFormLoading(false);
     }
-  };
+  });
 
-  const handleDelete = async (user) => {
+  const handleDelete = guardAction(async (user) => {
     if (!confirm(`Hapus mahasiswa "${user.name}"?\nSeluruh data absensinya juga akan dihapus.`)) return;
     try {
       await axios.delete(`${API}/users/${user.id}`, { headers: headers() });
       setActionMsg('Mahasiswa berhasil dihapus');
-      fetchUsers();
+      fetchUsers(debouncedFilterKelas);
       setTimeout(() => setActionMsg(''), 3000);
     } catch (err) {
       alert(err.response?.data?.error || 'Gagal menghapus');
     }
-  };
+  });
 
-  const handleResetPassword = async (user) => {
+  const handleResetPassword = guardAction(async (user) => {
     if (!confirm(`Reset password "${user.name}" ke NPM (${user.npm})?`)) return;
     try {
       const res = await axios.put(`${API}/users/${user.id}/reset-password`, {}, { headers: headers() });
@@ -721,7 +739,7 @@ function TabUsers() {
     } catch (err) {
       alert(err.response?.data?.error || 'Gagal reset password');
     }
-  };
+  });
 
   return (
     <div className="space-y-5">
@@ -853,6 +871,9 @@ function TabSettings() {
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
 
+  // Guard: cegah double-click
+  const [saveLocked, guardSave] = useButtonGuard(1500);
+
   const fetchSettings = async () => {
     try {
       const res = await axios.get(`${API}/settings`, { headers: headers() });
@@ -862,7 +883,7 @@ function TabSettings() {
 
   useEffect(() => { fetchSettings(); }, []);
 
-  const handleSave = async () => {
+  const handleSave = guardSave(async () => {
     setLoading(true); setMsg(''); setError('');
     try {
       const res = await axios.put(`${API}/settings`, form, { headers: headers() });
@@ -873,7 +894,7 @@ function TabSettings() {
     } finally {
       setLoading(false);
     }
-  };
+  });
 
   return (
     <div className="max-w-2xl">

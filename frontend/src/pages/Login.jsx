@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import axios from 'axios';
+import { useButtonGuard } from '../hooks/useDebounce';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -10,7 +11,10 @@ export default function Login({ onLogin }) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleSubmit = async (e) => {
+  // Guard: cegah double-submit
+  const [isLocked, guardTrigger] = useButtonGuard(1500);
+
+  const _doLogin = useCallback(async (e) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
       setError('Username dan password wajib diisi');
@@ -30,7 +34,10 @@ export default function Login({ onLogin }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [username, password, onLogin]);
+
+  const handleSubmit = guardTrigger(_doLogin);
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-900 via-sky-800 to-blue-900 relative overflow-hidden">
@@ -141,7 +148,7 @@ export default function Login({ onLogin }) {
             <button
               id="btn-login"
               type="submit"
-              disabled={loading}
+              disabled={loading || isLocked}
               className="w-full py-3.5 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-sky-900/40 disabled:opacity-60 disabled:cursor-not-allowed mt-2 flex items-center justify-center gap-2"
             >
               {loading ? (
