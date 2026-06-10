@@ -7,7 +7,14 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  log: ['error'],
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL,
+    },
+  },
+});
 const app = express();
 const PORT = process.env.PORT || 5000;
 const SECRET_KEY = process.env.JWT_SECRET || "smartattendance_timdis_2024";
@@ -954,8 +961,24 @@ app.get("/", (req, res) => {
   res.send("Smart Attendance API Running");
 });
 
-app.listen(PORT, () => {
-  console.log(`Server Smart Attendance berjalan di port ${PORT}`);
+// Health check endpoint untuk test koneksi DB
+app.get("/api/health", async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: "ok", database: "connected", env: {
+      hasDatabaseUrl: !!process.env.DATABASE_URL,
+      hasDirectUrl: !!process.env.DIRECT_URL,
+    }});
+  } catch (error) {
+    res.status(500).json({ status: "error", database: "disconnected", message: error.message });
+  }
 });
+
+// Hanya jalankan server jika bukan di Vercel (serverless)
+if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
+    console.log(`Server Smart Attendance berjalan di port ${PORT}`);
+  });
+}
 
 module.exports = app;
