@@ -20,14 +20,15 @@ const PORT = process.env.PORT || 5000;
 const SECRET_KEY = process.env.JWT_SECRET || "smartattendance_timdis_2024";
 
 // =============================================
-// CORS — Izinkan frontend (Vercel) & lokal dev
+// CORS — Izinkan frontend (Netlify) & lokal dev
 // =============================================
 app.use(cors({
   origin: function (origin, callback) {
     // Izinkan request tanpa origin (Postman, curl, mobile app)
     if (!origin) return callback(null, true);
-    // Izinkan semua subdomain vercel.app dan localhost
+    // Izinkan semua subdomain netlify.app, vercel.app, dan localhost
     if (
+      origin.includes("netlify.app") ||
       origin.includes("vercel.app") ||
       origin.includes("localhost") ||
       origin === process.env.FRONTEND_URL

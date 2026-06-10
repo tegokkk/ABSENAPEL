@@ -16,14 +16,19 @@ dist-ssr
 .env
 .env.local
 .env.production
-api/.env
 
 # Database file lokal
-api/prisma/dev.db
-api/prisma/*.db-journal
+backend/prisma/dev.db
+backend/prisma/*.db-journal
 
 # Upload files lokal
-api/uploads/
+backend/uploads/
+
+# Netlify build cache
+.netlify
+
+# Vercel (sudah tidak digunakan)
+.vercel
 
 # Editor directories and files
 .vscode/*

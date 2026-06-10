@@ -1,0 +1,20 @@
+[build]
+  base    = ""
+  command = "cd backend && npm install && npx prisma generate && cd ../frontend && npm install && npm run build"
+  publish = "frontend/dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Arahkan semua request /api/* ke Netlify Function
+[[redirects]]
+  from   = "/api/*"
+  to     = "/.netlify/functions/api/:splat"
+  status = 200
+
+# SPA fallback — selalu kembalikan index.html untuk client-side routing
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
