@@ -1,7 +1,7 @@
 [build]
-  base    = ""
-  command = "cd backend && npm install && npx prisma generate && cd ../frontend && npm install && npm run build"
-  publish = "frontend/dist"
+  base      = ""
+  command   = "npm install && cd backend && npm install && npx prisma generate && cd ../frontend && npm install && npm run build"
+  publish   = "frontend/dist"
   functions = "netlify/functions"
 
 [build.environment]
