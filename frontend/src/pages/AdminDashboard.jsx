@@ -1,28 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import ExcelJS from 'exceljs';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
 import { useDebounce, useButtonGuard } from '../hooks/useDebounce';
 
-
 const API = `${import.meta.env.VITE_API_URL || ''}/api`;
-const BASE_URL = import.meta.env.VITE_API_URL || '';
 const token = () => localStorage.getItem('token');
 const headers = () => ({ Authorization: `Bearer ${token()}` });
 
 const CLASSES = ['MI 4A', 'MI 4B', 'MI 4C', 'MI 4D'];
-
-// Fix Leaflet default icon
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
 
 // ============================================================
 // MODAL KOMPONEN
@@ -49,21 +36,9 @@ function Modal({ title, onClose, children }) {
 // ============================================================
 // STATUS BADGE HELPER
 // ============================================================
-const getStatusBadge = (status, admin_action) => {
-  if (status === 'PENDING') {
-    if (admin_action === 'REJECTED') {
-      return { bg: 'bg-red-100 text-red-700 border border-red-200', label: 'Ditolak' };
-    }
-    return { bg: 'bg-amber-100 text-amber-700 border border-amber-200', label: 'Pending' };
-  }
+const getStatusBadge = (status) => {
   if (status === 'TERLAMBAT') return { bg: 'bg-orange-100 text-orange-700 border border-orange-200', label: 'Terlambat' };
   return { bg: 'bg-emerald-100 text-emerald-700 border border-emerald-200', label: 'Hadir' };
-};
-
-const getValidasiBadge = (validasi) => {
-  if (validasi === 'VALID') return { bg: 'bg-emerald-50 text-emerald-600 border border-emerald-100', label: 'Valid' };
-  if (validasi === 'DI_LUAR_RADIUS') return { bg: 'bg-red-50 text-red-600 border border-red-100', label: 'Luar Radius' };
-  return { bg: 'bg-amber-50 text-amber-600 border border-amber-100', label: 'Mencurigakan' };
 };
 
 // ============================================================
@@ -72,31 +47,25 @@ const getValidasiBadge = (validasi) => {
 function TabAbsensi() {
   const [attendances, setAttendances] = useState([]);
   const [selectedKelas, setSelectedKelas] = useState('');
-  const [filterValidasi, setFilterValidasi] = useState('Semua');
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(null);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
 
-  // Debounce filter 300ms — cegah fetch berlebihan saat klik cepat
-  const debouncedKelas    = useDebounce(selectedKelas, 300);
-  const debouncedValidasi = useDebounce(filterValidasi, 300);
-
-  // Guard export agar tidak trigger berkali-kali
+  const debouncedKelas = useDebounce(selectedKelas, 300);
   const [exportLocked, guardExport] = useButtonGuard(2000);
 
-  const fetchAttendances = useCallback(async (kelas, validasi) => {
+  const fetchAttendances = useCallback(async (kelas) => {
     try {
       let url = `${API}/attendance?`;
       if (kelas && kelas !== 'Semua Kelas') url += `kelas=${encodeURIComponent(kelas)}&`;
-      if (validasi && validasi !== 'Semua') url += `validasi=${encodeURIComponent(validasi)}`;
       const res = await axios.get(url, { headers: headers() });
       setAttendances(res.data);
     } catch {}
   }, []);
 
   useEffect(() => {
-    fetchAttendances(debouncedKelas, debouncedValidasi);
-  }, [debouncedKelas, debouncedValidasi, fetchAttendances]);
+    fetchAttendances(debouncedKelas);
+  }, [debouncedKelas, fetchAttendances]);
 
 
   const handleDelete = async (id) => {
@@ -104,7 +73,7 @@ function TabAbsensi() {
     setDeleting(id);
     try {
       await axios.delete(`${API}/attendance/${id}`, { headers: headers() });
-      fetchAttendances(debouncedKelas, debouncedValidasi);
+      fetchAttendances(debouncedKelas);
     } catch (err) {
       alert(err.response?.data?.error || 'Gagal menghapus');
     } finally {
@@ -127,14 +96,8 @@ function TabAbsensi() {
         { header: 'Tanggal', key: 'tanggal', width: 15 },
         { header: 'Waktu Absen', key: 'jam_absen', width: 15 },
         { header: 'Status', key: 'status', width: 12 },
-        { header: 'Validasi', key: 'validasi', width: 20 },
-        { header: 'Akurasi GPS (m)', key: 'accuracy', width: 15 },
-        { header: 'Jarak (m)', key: 'jarak', width: 15 },
-        { header: 'Latitude', key: 'lat', width: 15 },
-        { header: 'Longitude', key: 'lng', width: 15 },
         { header: 'IP Address', key: 'ip', width: 15 },
         { header: 'Browser & Platform', key: 'device', width: 25 },
-        { header: 'Catatan Admin', key: 'admin_note', width: 30 }
       ];
 
       sheet.getRow(1).eachCell(cell => {
@@ -152,19 +115,10 @@ function TabAbsensi() {
           tanggal: new Date(a.tanggal).toLocaleDateString('id-ID'),
           jam_absen: a.jam_absen ? new Date(a.jam_absen).toLocaleTimeString('id-ID') : '-',
           status: a.status,
-          validasi: a.validasi_lokasi,
-          accuracy: a.accuracy !== null ? a.accuracy.toFixed(2) : '-',
-          jarak: a.jarak_dari_titik !== null ? a.jarak_dari_titik.toFixed(2) : '-',
-          lat: a.latitude,
-          lng: a.longitude,
           ip: a.ip_address || '-',
           device: `${a.browser || '-'} / ${a.platform || '-'}`,
-          admin_note: a.admin_note || '-'
         });
         if (a.status === 'TERLAMBAT') {
-          row.getCell('status').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
-          row.getCell('status').font = { color: { argb: 'FFD97706' }, bold: true };
-        } else if (a.status === 'PENDING') {
           row.getCell('status').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
           row.getCell('status').font = { color: { argb: 'FFD97706' }, bold: true };
         } else {
@@ -205,57 +159,37 @@ function TabAbsensi() {
       doc.setFontSize(9);
       doc.text(`Kelas: ${filterLabel}  |  Tanggal Cetak: ${today}`, 148, 28, { align: 'center' });
 
-      // Garis pemisah
       doc.setDrawColor(2, 132, 199);
       doc.setLineWidth(0.5);
       doc.line(14, 31, 283, 31);
 
-      // Tabel
       const tableData = attendances.map((a, i) => [
         i + 1,
         a.user.name,
         a.user.kelas || '-',
         new Date(a.tanggal).toLocaleDateString('id-ID'),
         a.jam_absen ? new Date(a.jam_absen).toLocaleTimeString('id-ID') : '-',
-        a.status === 'TERLAMBAT' ? 'Terlambat' : a.status === 'PENDING' ? 'Pending' : 'Hadir',
-        a.validasi_lokasi === 'VALID' ? 'Valid' : 'Suspect',
-        a.jarak_dari_titik !== null ? `${a.jarak_dari_titik.toFixed(1)}m` : '-',
-        a.accuracy !== null ? `±${a.accuracy.toFixed(1)}m` : '-'
+        a.status === 'TERLAMBAT' ? 'Terlambat' : 'Hadir'
       ]);
 
       autoTable(doc, {
         startY: 35,
-        head: [['No', 'Nama Mahasiswa', 'Kelas', 'Tanggal', 'Waktu Absen', 'Status', 'Validasi', 'Jarak', 'Akurasi GPS']],
+        head: [['No', 'Nama Mahasiswa', 'Kelas', 'Tanggal', 'Waktu Absen', 'Status']],
         body: tableData,
-        styles: {
-          fontSize: 8,
-          cellPadding: 3,
-          lineColor: [226, 232, 240],
-          lineWidth: 0.1,
-        },
-        headStyles: {
-          fillColor: [2, 132, 199],
-          textColor: [255, 255, 255],
-          fontStyle: 'bold',
-          halign: 'center',
-        },
-        alternateRowStyles: {
-          fillColor: [248, 250, 252],
-        },
+        styles: { fontSize: 9, cellPadding: 3, lineColor: [226, 232, 240], lineWidth: 0.1 },
+        headStyles: { fillColor: [2, 132, 199], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
         columnStyles: {
-          0: { halign: 'center', cellWidth: 10 },
-          1: { cellWidth: 50 },
-          2: { halign: 'center', cellWidth: 20 },
-          3: { halign: 'center', cellWidth: 30 },
-          4: { halign: 'center', cellWidth: 25 },
-          5: { halign: 'center', cellWidth: 22 },
-          6: { halign: 'center', cellWidth: 22 },
-          7: { halign: 'center', cellWidth: 20 },
-          8: { halign: 'center', cellWidth: 25 },
+          0: { halign: 'center', cellWidth: 15 },
+          1: { cellWidth: 80 },
+          2: { halign: 'center', cellWidth: 30 },
+          3: { halign: 'center', cellWidth: 40 },
+          4: { halign: 'center', cellWidth: 40 },
+          5: { halign: 'center', cellWidth: 30 },
         },
         didParseCell: (data) => {
           if (data.section === 'body' && data.column.index === 5) {
-            if (data.cell.raw === 'Terlambat' || data.cell.raw === 'Pending') {
+            if (data.cell.raw === 'Terlambat') {
               data.cell.styles.textColor = [217, 119, 6];
               data.cell.styles.fontStyle = 'bold';
             } else {
@@ -267,7 +201,6 @@ function TabAbsensi() {
         margin: { left: 14, right: 14 },
       });
 
-      // Footer
       const pageCount = doc.internal.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
@@ -287,48 +220,25 @@ function TabAbsensi() {
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-wrap gap-3 items-center justify-between">
-        <div className="flex flex-wrap gap-2 items-center">
-          <div className="flex bg-slate-100 rounded-xl p-1">
-            {['Semua Kelas', ...CLASSES].map(k => (
-              <button
-                key={k}
-                onClick={() => setSelectedKelas(k === 'Semua Kelas' ? '' : k)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  (selectedKelas === '' && k === 'Semua Kelas') || selectedKelas === k
-                    ? 'bg-white text-sky-700 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                {k}
-              </button>
+      <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="flex items-center w-full md:w-auto">
+          <select
+            value={selectedKelas}
+            onChange={(e) => setSelectedKelas(e.target.value)}
+            className="w-full md:w-64 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer"
+          >
+            <option value="">Semua Kelas</option>
+            {CLASSES.map((k) => (
+              <option key={k} value={k}>{k}</option>
             ))}
-          </div>
-          
-          <div className="h-6 w-px bg-slate-200 mx-1"></div>
-
-          <div className="flex bg-slate-100 rounded-xl p-1">
-            {['Semua', 'VALID', 'MENCURIGAKAN'].map(v => (
-              <button
-                key={v}
-                onClick={() => setFilterValidasi(v)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  filterValidasi === v
-                    ? 'bg-white text-sky-700 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                {v === 'Semua' ? 'Semua Status' : v === 'VALID' ? 'Valid' : 'Mencurigakan'}
-              </button>
-            ))}
-          </div>
+          </select>
         </div>
         
-        <div className="flex gap-2">
+        <div className="flex gap-2 w-full md:w-auto">
           <button
             onClick={exportExcel}
             disabled={loading}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm disabled:opacity-50"
+            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm disabled:opacity-50"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
@@ -337,7 +247,7 @@ function TabAbsensi() {
           </button>
           <button
             onClick={exportPDF}
-            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm"
+            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
@@ -357,16 +267,14 @@ function TabAbsensi() {
                 <th className="px-4 py-3">Mahasiswa</th>
                 <th className="px-4 py-3">Waktu</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Validasi</th>
-                <th className="px-4 py-3">GPS Data</th>
                 <th className="px-4 py-3">Foto</th>
-                <th className="px-4 py-3">Aksi</th>
+                <th className="px-4 py-3 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {attendances.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan="6" className="px-4 py-12 text-center text-slate-400">
                     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="mx-auto mb-2 text-slate-200">
                       <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
                     </svg>
@@ -374,8 +282,7 @@ function TabAbsensi() {
                   </td>
                 </tr>
               ) : attendances.map((a, i) => {
-                const sBadge = getStatusBadge(a.status, a.admin_action);
-                const vBadge = getValidasiBadge(a.validasi_lokasi);
+                const sBadge = getStatusBadge(a.status);
                 
                 return (
                   <tr key={a.id_absensi} className="hover:bg-slate-50/50 transition-colors">
@@ -403,24 +310,6 @@ function TabAbsensi() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-lg text-[11px] font-medium ${vBadge.bg}`}>
-                        {vBadge.label}
-                      </span>
-                      {a.alasan_flag && (
-                        <div className="text-[10px] text-red-500 mt-1 max-w-[120px] truncate" title={a.alasan_flag}>
-                          {a.alasan_flag}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-[11px] text-slate-500">
-                        Akurasi: <span className="font-mono font-medium">{a.accuracy !== null ? `±${a.accuracy.toFixed(1)}m` : '-'}</span>
-                      </div>
-                      <div className="text-[11px] text-slate-500">
-                        Jarak: <span className="font-mono font-medium">{a.jarak_dari_titik !== null ? `${a.jarak_dari_titik.toFixed(1)}m` : '-'}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
                       {a.foto_selfie ? (
                         <img
                           src={a.foto_selfie}
@@ -430,7 +319,7 @@ function TabAbsensi() {
                         />
                       ) : <span className="text-slate-300 text-xs">—</span>}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => handleDelete(a.id_absensi)}
                         disabled={deleting === a.id_absensi}
@@ -449,197 +338,6 @@ function TabAbsensi() {
 
       {/* Photo Lightbox */}
       {selectedPhoto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setSelectedPhoto(null)}>
-          <img src={selectedPhoto} alt="Selfie" className="max-w-sm max-h-[80vh] rounded-2xl shadow-2xl border-4 border-white" />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ============================================================
-// TAB VERIFIKASI (PENDING)
-// ============================================================
-function TabVerifikasi({ onVerified }) {
-  const [pending, setPending] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedPhoto, setSelectedPhoto] = useState(null);
-  const [actionModal, setActionModal] = useState(null); // { id, type: 'APPROVED'|'REJECTED', name }
-  const [note, setNote] = useState('');
-
-  // Guard: cegah double-click
-  const [actionLocked, guardAction] = useButtonGuard(1500);
-
-  const fetchPending = async () => {
-    try {
-      const res = await axios.get(`${API}/attendance/pending`, { headers: headers() });
-      setPending(res.data);
-    } catch {}
-  };
-
-  useEffect(() => {
-    fetchPending();
-  }, []);
-
-  const handleAction = guardAction(async () => {
-    if (!actionModal) return;
-    setLoading(true);
-    try {
-      await axios.put(`${API}/attendance/${actionModal.id}/verify`, {
-        action: actionModal.type,
-        note
-      }, { headers: headers() });
-      
-      setActionModal(null);
-      setNote('');
-      fetchPending();
-      if (onVerified) onVerified(); // Update stats
-    } catch (err) {
-      alert(err.response?.data?.error || 'Gagal memproses verifikasi');
-    } finally {
-      setLoading(false);
-    }
-  });
-
-  return (
-    <div className="space-y-4">
-      <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex gap-3 items-start">
-        <div className="mt-0.5 text-amber-500">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-          </svg>
-        </div>
-        <div>
-          <h3 className="text-amber-800 font-semibold text-sm">Verifikasi Manual Diperlukan</h3>
-          <p className="text-amber-700 text-xs mt-1">
-            Data absensi di bawah ini ditandai sebagai mencurigakan (kemungkinan Fake GPS atau sinyal tidak akurat). Silakan tinjau dan putuskan apakah absensi disetujui atau ditolak.
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {pending.length === 0 ? (
-          <div className="col-span-full bg-white border border-slate-100 rounded-2xl p-12 text-center">
-            <div className="w-16 h-16 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-            </div>
-            <h3 className="font-bold text-slate-700">Antrian Kosong</h3>
-            <p className="text-slate-400 text-sm mt-1">Semua absensi telah diverifikasi.</p>
-          </div>
-        ) : pending.map(p => (
-          <div key={p.id_absensi} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-slate-100">
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <h4 className="font-bold text-slate-800">{p.user.name}</h4>
-                  <p className="text-xs text-slate-500 font-mono">{p.user.npm} • {p.user.kelas}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs font-semibold text-slate-600">{new Date(p.tanggal).toLocaleDateString('id-ID')}</p>
-                  <p className="text-xs font-mono text-slate-500">{new Date(p.jam_absen).toLocaleTimeString('id-ID')}</p>
-                </div>
-              </div>
-              <div className="bg-red-50 text-red-600 text-[11px] font-medium p-2 rounded-lg border border-red-100 mt-3">
-                <span className="block font-bold mb-1">Penyebab Flag:</span>
-                {p.alasan_flag || 'Tidak diketahui'}
-              </div>
-            </div>
-
-            <div className="p-4 flex-1 flex flex-col gap-4">
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <p className="text-slate-400 mb-0.5">Akurasi GPS</p>
-                  <p className="font-medium text-slate-700">{p.accuracy !== null ? `±${p.accuracy.toFixed(1)}m` : 'Tidak tersedia'}</p>
-                </div>
-                <div>
-                  <p className="text-slate-400 mb-0.5">Jarak ke Titik</p>
-                  <p className="font-medium text-slate-700">{p.jarak_dari_titik !== null ? `${p.jarak_dari_titik.toFixed(1)}m` : 'Tidak tersedia'}</p>
-                </div>
-                <div className="col-span-2">
-                  <p className="text-slate-400 mb-0.5">Device / Browser</p>
-                  <p className="font-medium text-slate-700 truncate" title={p.device_info}>{p.browser || 'Unknown'} / {p.platform || 'Unknown'} <span className="text-slate-400 ml-1">({p.ip_address || 'IP Unknown'})</span></p>
-                </div>
-              </div>
-
-              <div className="flex gap-3 mt-auto">
-                {p.foto_selfie && (
-                  <img 
-                    src={p.foto_selfie} 
-                    alt="Selfie" 
-                    className="w-16 h-16 rounded-xl object-cover cursor-pointer border border-slate-200"
-                    onClick={() => setSelectedPhoto(p.foto_selfie)}
-                  />
-                )}
-                {p.latitude && p.longitude && (
-                  <div className="flex-1 h-16 rounded-xl overflow-hidden border border-slate-200 z-0">
-                    <MapContainer center={[p.latitude, p.longitude]} zoom={15} style={{ height: '100%', width: '100%' }} zoomControl={false} dragging={false}>
-                      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                      <Marker position={[p.latitude, p.longitude]} />
-                    </MapContainer>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="p-3 bg-slate-50 border-t border-slate-100 flex gap-2">
-              <button 
-                onClick={() => setActionModal({ id: p.id_absensi, type: 'REJECTED', name: p.user.name })}
-                className="flex-1 py-2 bg-white border border-red-200 text-red-600 rounded-xl text-sm font-semibold hover:bg-red-50 transition-all"
-              >
-                Tolak
-              </button>
-              <button 
-                onClick={() => setActionModal({ id: p.id_absensi, type: 'APPROVED', name: p.user.name })}
-                className="flex-1 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-all shadow-sm"
-              >
-                Setujui
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Action Modal */}
-      {actionModal && (
-        <Modal 
-          title={actionModal.type === 'APPROVED' ? 'Setujui Absensi' : 'Tolak Absensi'} 
-          onClose={() => { setActionModal(null); setNote(''); }}
-        >
-          <div className="space-y-4">
-            <p className="text-sm text-slate-600">
-              Anda akan <strong className={actionModal.type === 'APPROVED' ? 'text-emerald-600' : 'text-red-600'}>
-                {actionModal.type === 'APPROVED' ? 'MENYETUJUI' : 'MENOLAK'}
-              </strong> absensi milik <strong>{actionModal.name}</strong>.
-            </p>
-            
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Catatan (Opsional)</label>
-              <textarea 
-                value={note} 
-                onChange={e => setNote(e.target.value)}
-                placeholder={actionModal.type === 'APPROVED' ? "Misal: Sinyal memang sedang buruk..." : "Misal: Terdeteksi Fake GPS..."}
-                className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 outline-none resize-none h-24" 
-              />
-            </div>
-            
-            <div className="flex gap-3 pt-2">
-              <button onClick={() => setActionModal(null)} className="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 text-sm">Batal</button>
-              <button 
-                onClick={handleAction} 
-                disabled={loading}
-                className={`flex-1 py-2.5 text-white rounded-xl font-semibold transition-all text-sm disabled:opacity-50 ${actionModal.type === 'APPROVED' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}
-              >
-                {loading ? 'Memproses...' : actionModal.type === 'APPROVED' ? 'Ya, Setujui' : 'Ya, Tolak'}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* Photo Lightbox */}
-      {selectedPhoto && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={() => setSelectedPhoto(null)}>
           <img src={selectedPhoto} alt="Selfie" className="max-w-[90vw] max-h-[90vh] rounded-2xl shadow-2xl border-4 border-white" />
         </div>
@@ -654,6 +352,12 @@ function TabVerifikasi({ onVerified }) {
 function TabUsers() {
   const [users, setUsers] = useState([]);
   const [filterKelas, setFilterKelas] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+
   const [showModal, setShowModal] = useState(false);
   const [editUser, setEditUser] = useState(null);
   const [form, setForm] = useState({ name: '', npm: '', kelas: 'MI 4A' });
@@ -661,10 +365,7 @@ function TabUsers() {
   const [formLoading, setFormLoading] = useState(false);
   const [actionMsg, setActionMsg] = useState('');
 
-  // Debounce filter kelas 300ms
   const debouncedFilterKelas = useDebounce(filterKelas, 300);
-
-  // Guard: cegah double-click pada aksi user
   const [actionLocked, guardAction] = useButtonGuard(1500);
 
   const fetchUsers = useCallback(async (kelas) => {
@@ -676,8 +377,27 @@ function TabUsers() {
     } catch {}
   }, []);
 
-  useEffect(() => { fetchUsers(debouncedFilterKelas); }, [debouncedFilterKelas, fetchUsers]);
+  useEffect(() => { 
+    fetchUsers(debouncedFilterKelas); 
+    setCurrentPage(1); // Reset page on filter change
+  }, [debouncedFilterKelas, fetchUsers]);
 
+  // Filter & Search Logic
+  const filteredUsers = useMemo(() => {
+    if (!searchQuery) return users;
+    const lowerQ = searchQuery.toLowerCase();
+    return users.filter(u => 
+      (u.name && u.name.toLowerCase().includes(lowerQ)) || 
+      (u.npm && u.npm.toLowerCase().includes(lowerQ))
+    );
+  }, [users, searchQuery]);
+
+  // Pagination Logic
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const currentData = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredUsers.slice(start, start + itemsPerPage);
+  }, [filteredUsers, currentPage]);
 
   const openAdd = () => {
     setEditUser(null);
@@ -744,26 +464,38 @@ function TabUsers() {
   return (
     <div className="space-y-5">
       {/* Toolbar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-wrap gap-3 items-center justify-between">
-        <div className="flex flex-wrap gap-2">
-          {['Semua Kelas', ...CLASSES].map(k => (
-            <button
-              key={k}
-              onClick={() => setFilterKelas(k === 'Semua Kelas' ? '' : k)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                (filterKelas === '' && k === 'Semua Kelas') || filterKelas === k
-                  ? 'bg-sky-600 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {k}
-            </button>
-          ))}
+      <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto flex-1">
+          {/* Dropdown Kelas */}
+          <select
+            value={filterKelas}
+            onChange={(e) => setFilterKelas(e.target.value)}
+            className="w-full md:w-48 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer"
+          >
+            <option value="">Semua Kelas</option>
+            {CLASSES.map((k) => (
+              <option key={k} value={k}>{k}</option>
+            ))}
+          </select>
+          
+          {/* Search Input */}
+          <div className="relative w-full md:w-64">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            </div>
+            <input
+              type="text"
+              placeholder="Cari nama atau NPM..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all bg-slate-50"
+            />
+          </div>
         </div>
+        
         <button
-          id="btn-tambah-mahasiswa"
           onClick={openAdd}
-          className="flex items-center gap-2 bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm"
+          className="w-full md:w-auto flex justify-center items-center gap-2 bg-sky-600 hover:bg-sky-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm"
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -776,47 +508,76 @@ function TabUsers() {
         <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 text-sm font-medium">{actionMsg}</div>
       )}
 
-      {/* Tabel */}
+      {/* Tabel Data - Responsive */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-50 flex justify-between items-center">
+        <div className="px-5 py-4 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
           <h3 className="font-semibold text-slate-700 text-sm">
-            Total: <span className="text-sky-600 font-bold">{users.length}</span> mahasiswa
+            Total: <span className="text-sky-600 font-bold">{filteredUsers.length}</span> mahasiswa ditemukan
           </h3>
         </div>
-        <div className="overflow-x-auto">
+        
+        {/* Mobile View (Cards) */}
+        <div className="block md:hidden">
+          {currentData.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 text-sm">Data mahasiswa tidak ditemukan.</div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {currentData.map((u, i) => (
+                <div key={u.id} className="p-4 flex flex-col gap-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="font-bold text-slate-800">{u.name}</div>
+                      <div className="text-xs text-slate-500 font-mono mt-0.5">{u.npm || '-'}</div>
+                    </div>
+                    <span className="px-2.5 py-1 bg-sky-50 text-sky-700 rounded-lg text-xs font-bold border border-sky-100">
+                      {u.kelas || '-'}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 w-full pt-2">
+                    <button onClick={() => openEdit(u)} className="flex-1 py-2 text-xs text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 font-semibold border border-blue-100">Edit</button>
+                    <button onClick={() => handleResetPassword(u)} className="flex-1 py-2 text-xs text-amber-600 bg-amber-50 rounded-lg hover:bg-amber-100 font-semibold border border-amber-100">Reset PW</button>
+                    <button onClick={() => handleDelete(u)} className="flex-1 py-2 text-xs text-red-600 bg-red-50 rounded-lg hover:bg-red-100 font-semibold border border-red-100">Hapus</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Desktop View (Table) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-slate-50 border-b border-slate-100 text-xs text-slate-500 uppercase tracking-wide">
               <tr>
-                <th className="px-4 py-3">No</th>
-                <th className="px-4 py-3">Nama Mahasiswa</th>
-                <th className="px-4 py-3">NPM</th>
-                <th className="px-4 py-3">Kelas</th>
-                <th className="px-4 py-3">Aksi</th>
+                <th className="px-5 py-3">No</th>
+                <th className="px-5 py-3">Nama Mahasiswa</th>
+                <th className="px-5 py-3">NPM</th>
+                <th className="px-5 py-3">Kelas</th>
+                <th className="px-5 py-3 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {users.length === 0 ? (
+              {currentData.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-4 py-12 text-center text-slate-400">Tidak ada mahasiswa ditemukan.</td>
+                  <td colSpan="5" className="px-5 py-12 text-center text-slate-400">Data mahasiswa tidak ditemukan.</td>
                 </tr>
-              ) : users.map((u, i) => (
+              ) : currentData.map((u, i) => (
                 <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-4 py-3 text-slate-400 text-xs">{i + 1}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-5 py-4 text-slate-400 text-xs">{(currentPage - 1) * itemsPerPage + i + 1}</td>
+                  <td className="px-5 py-4">
                     <div className="font-semibold text-slate-800">{u.name}</div>
-                    <div className="text-xs text-slate-400">@{u.username}</div>
                   </td>
-                  <td className="px-4 py-3 font-mono text-sm text-slate-600">{u.npm || '-'}</td>
-                  <td className="px-4 py-3">
-                    <span className="px-2 py-0.5 bg-sky-50 text-sky-700 rounded-lg text-xs font-semibold border border-sky-100">
+                  <td className="px-5 py-4 font-mono text-sm text-slate-600">{u.npm || '-'}</td>
+                  <td className="px-5 py-4">
+                    <span className="px-2.5 py-1 bg-sky-50 text-sky-700 rounded-lg text-xs font-bold border border-sky-100">
                       {u.kelas || '-'}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1.5">
-                      <button onClick={() => openEdit(u)} className="px-2.5 py-1.5 text-xs text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-all font-medium">Edit</button>
-                      <button onClick={() => handleResetPassword(u)} className="px-2.5 py-1.5 text-xs text-amber-600 bg-amber-50 rounded-lg hover:bg-amber-100 transition-all font-medium">Reset PW</button>
-                      <button onClick={() => handleDelete(u)} className="px-2.5 py-1.5 text-xs text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-all font-medium">Hapus</button>
+                  <td className="px-5 py-4">
+                    <div className="flex gap-2 justify-end">
+                      <button onClick={() => openEdit(u)} className="px-3 py-1.5 text-xs text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-all font-semibold">Edit</button>
+                      <button onClick={() => handleResetPassword(u)} className="px-3 py-1.5 text-xs text-amber-600 bg-amber-50 rounded-lg hover:bg-amber-100 transition-all font-semibold">Reset PW</button>
+                      <button onClick={() => handleDelete(u)} className="px-3 py-1.5 text-xs text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-all font-semibold">Hapus</button>
                     </div>
                   </td>
                 </tr>
@@ -824,6 +585,31 @@ function TabUsers() {
             </tbody>
           </table>
         </div>
+        
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="px-5 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/30">
+            <span className="text-sm text-slate-500">
+              Halaman <span className="font-semibold text-slate-700">{currentPage}</span> dari <span className="font-semibold text-slate-700">{totalPages}</span>
+            </span>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed bg-white"
+              >
+                Previous
+              </button>
+              <button 
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed bg-white"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {showModal && (
@@ -871,7 +657,6 @@ function TabSettings() {
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
 
-  // Guard: cegah double-click
   const [saveLocked, guardSave] = useButtonGuard(1500);
 
   const fetchSettings = async () => {
@@ -959,7 +744,7 @@ function TabSettings() {
 // ============================================================
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('absensi');
-  const [stats, setStats] = useState({ totalToday: 0, hadir: 0, terlambat: 0, pending: 0, mencurigakan: 0, byKelas: {}, totalPending: 0 });
+  const [stats, setStats] = useState({ totalToday: 0, hadir: 0, terlambat: 0, byKelas: {} });
 
   const fetchStats = async () => {
     try {
@@ -976,10 +761,6 @@ export default function AdminDashboard() {
     {
       id: 'absensi', label: 'Data Absensi',
       icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-    },
-    {
-      id: 'verifikasi', label: 'Verifikasi', badge: stats.totalPending,
-      icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
     },
     {
       id: 'users', label: 'Manajemen Mahasiswa',
@@ -1010,22 +791,18 @@ export default function AdminDashboard() {
         </div>
 
         {/* Stats Grid Hari Ini */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
-          <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/10">
-            <p className="text-sky-200 text-xs font-medium mb-0.5">Total Absen</p>
-            <p className="text-2xl font-bold">{stats.totalToday}</p>
+        <div className="grid grid-cols-3 gap-4 relative z-10">
+          <div className="bg-white/10 rounded-xl p-4 backdrop-blur-sm border border-white/10">
+            <p className="text-sky-200 text-sm font-medium mb-1">Total Absen Hari Ini</p>
+            <p className="text-3xl font-bold">{stats.totalToday}</p>
           </div>
-          <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/10">
-            <p className="text-emerald-300 text-xs font-medium mb-0.5">Hadir Tepat</p>
-            <p className="text-2xl font-bold text-emerald-100">{stats.hadir}</p>
+          <div className="bg-white/10 rounded-xl p-4 backdrop-blur-sm border border-white/10">
+            <p className="text-emerald-300 text-sm font-medium mb-1">Hadir Tepat Waktu</p>
+            <p className="text-3xl font-bold text-emerald-100">{stats.hadir}</p>
           </div>
-          <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/10">
-            <p className="text-amber-300 text-xs font-medium mb-0.5">Pending Review</p>
-            <p className="text-2xl font-bold text-amber-100">{stats.pending}</p>
-          </div>
-          <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/10">
-            <p className="text-orange-300 text-xs font-medium mb-0.5">Mencurigakan</p>
-            <p className="text-2xl font-bold text-orange-100">{stats.mencurigakan}</p>
+          <div className="bg-white/10 rounded-xl p-4 backdrop-blur-sm border border-white/10">
+            <p className="text-orange-300 text-sm font-medium mb-1">Terlambat</p>
+            <p className="text-3xl font-bold text-orange-100">{stats.terlambat}</p>
           </div>
         </div>
       </div>
@@ -1037,7 +814,7 @@ export default function AdminDashboard() {
             key={tab.id}
             id={`tab-${tab.id}`}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 sm:px-4 rounded-xl text-sm font-semibold transition-all ${
+            className={`flex-1 flex items-center justify-center gap-2 py-3 px-3 sm:px-4 rounded-xl text-sm font-semibold transition-all ${
               activeTab === tab.id
                 ? 'bg-sky-600 text-white shadow-sm'
                 : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
@@ -1045,11 +822,6 @@ export default function AdminDashboard() {
           >
             {tab.icon}
             <span className="hidden sm:inline">{tab.label}</span>
-            {tab.badge > 0 && (
-              <span className={`ml-1 px-1.5 py-0.5 text-[10px] rounded-full ${activeTab === tab.id ? 'bg-white text-sky-600' : 'bg-amber-100 text-amber-700'}`}>
-                {tab.badge}
-              </span>
-            )}
           </button>
         ))}
       </div>
@@ -1057,7 +829,6 @@ export default function AdminDashboard() {
       {/* Tab Content */}
       <div>
         {activeTab === 'absensi' && <TabAbsensi />}
-        {activeTab === 'verifikasi' && <TabVerifikasi onVerified={fetchStats} />}
         {activeTab === 'users' && <TabUsers />}
         {activeTab === 'settings' && <TabSettings />}
       </div>

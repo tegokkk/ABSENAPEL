@@ -140,19 +140,12 @@ export default function UserDashboard({ user }) {
       });
 
       const status = res.data.status;
-      if (status === 'PENDING') {
-        setMessage({
-          type: 'warning',
-          text: res.data.warning || 'Absensi Anda masuk antrian verifikasi admin. Silakan tunggu persetujuan.'
-        });
-      } else {
-        setMessage({
-          type: 'success',
-          text: status === 'TERLAMBAT'
-            ? 'Absen berhasil dicatat, namun Anda TERLAMBAT.'
-            : 'Absen Apel berhasil! Tepat waktu.'
-        });
-      }
+      setMessage({
+        type: 'success',
+        text: status === 'TERLAMBAT'
+          ? 'Absen berhasil dicatat, namun Anda TERLAMBAT.'
+          : 'Absen Apel berhasil! Tepat waktu.'
+      });
       fetchAttendances();
       setImgSrc(null);
     } catch (err) {
@@ -176,15 +169,13 @@ export default function UserDashboard({ user }) {
   const officeCoord = [settings.OFFICE_LAT, settings.OFFICE_LON];
 
   // Status badge color helper
-  const getStatusBadge = (status, validasi) => {
-    if (status === 'PENDING') return { bg: 'bg-amber-100 text-amber-700 border border-amber-200', label: 'Menunggu Verifikasi' };
+  const getStatusBadge = (status) => {
     if (status === 'TERLAMBAT') return { bg: 'bg-orange-100 text-orange-700 border border-orange-200', label: 'Terlambat' };
     return { bg: 'bg-emerald-100 text-emerald-700 border border-emerald-200', label: 'Hadir' };
   };
 
   const getTodayBadge = () => {
     if (!todayRecord) return null;
-    if (todayRecord.status === 'PENDING') return { bg: 'bg-amber-400/30 text-amber-100', label: 'Menunggu Verifikasi' };
     if (todayRecord.status === 'TERLAMBAT') return { bg: 'bg-orange-400/30 text-orange-100', label: 'Terlambat' };
     return { bg: 'bg-green-400/30 text-green-100', label: 'Hadir Hari Ini' };
   };
@@ -415,7 +406,6 @@ export default function UserDashboard({ user }) {
                   <th className="px-4 py-3 font-semibold rounded-tl-xl">Tanggal</th>
                   <th className="px-4 py-3 font-semibold">Waktu Absen</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 font-semibold">Validasi</th>
                   <th className="px-4 py-3 font-semibold rounded-tr-xl">Foto</th>
                 </tr>
               </thead>
@@ -431,7 +421,7 @@ export default function UserDashboard({ user }) {
                   </tr>
                 ) : (
                   attendances.map(a => {
-                    const badge = getStatusBadge(a.status, a.validasi_lokasi);
+                    const badge = getStatusBadge(a.status);
                     return (
                       <tr key={a.id_absensi} className="hover:bg-slate-50/50 transition-colors">
                         <td className="px-4 py-3 font-medium text-slate-700">
@@ -444,17 +434,6 @@ export default function UserDashboard({ user }) {
                           <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${badge.bg}`}>
                             {badge.label}
                           </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          {a.validasi_lokasi === 'VALID' ? (
-                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-medium border border-emerald-100">Valid</span>
-                          ) : a.admin_action === 'APPROVED' ? (
-                            <span className="px-2 py-0.5 bg-sky-50 text-sky-600 rounded-lg text-xs font-medium border border-sky-100">Disetujui</span>
-                          ) : a.admin_action === 'REJECTED' ? (
-                            <span className="px-2 py-0.5 bg-red-50 text-red-600 rounded-lg text-xs font-medium border border-red-100">Ditolak</span>
-                          ) : (
-                            <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-lg text-xs font-medium border border-amber-100">Review</span>
-                          )}
                         </td>
                         <td className="px-4 py-3">
                           {a.foto_selfie ? (

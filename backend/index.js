@@ -82,91 +82,8 @@ function checkIsLate(batasTerlambat) {
 }
 
 // =============================================
-// ANTI-FAKE GPS — VALIDASI LOKASI BERLAPIS
+// HELPER: Ambil IP address dari request
 // =============================================
-
-function validateLocation(lat, lon, accuracy, gpsTimestamp, settings) {
-  const flags = [];
-
-  // 1. Hitung jarak dari titik apel (Haversine)
-  const distance = getDistance(
-    lat,
-    lon,
-    settings.OFFICE_LAT,
-    settings.OFFICE_LON,
-  );
-
-  if (distance > settings.MAX_RADIUS) {
-    flags.push("DI_LUAR_RADIUS");
-  }
-
-  // 2. Cek GPS accuracy
-  if (accuracy !== null && accuracy !== undefined && !isNaN(accuracy)) {
-    if (accuracy === 0) {
-      // Fake GPS sering melaporkan accuracy = 0
-      flags.push("ACCURACY_NOL");
-    } else if (accuracy > 100) {
-      // Sinyal GPS terlalu lemah / tidak akurat
-      flags.push("GPS_TIDAK_AKURAT");
-    } else if (accuracy < 3) {
-      // Terlalu sempurna — curiga fake GPS
-      flags.push("ACCURACY_TERLALU_SEMPURNA");
-    }
-  } else {
-    flags.push("ACCURACY_TIDAK_ADA");
-  }
-
-  // 3. Cek timestamp GPS
-  if (gpsTimestamp && !isNaN(gpsTimestamp)) {
-    const now = Date.now();
-    const ageMs = now - gpsTimestamp;
-    if (ageMs > 60000) {
-      // Data GPS lebih dari 60 detik — kemungkinan data lama/cached
-      flags.push("GPS_TIMESTAMP_BASI");
-    }
-    if (ageMs < -5000) {
-      // Timestamp di masa depan (toleransi 5 detik)
-      flags.push("GPS_TIMESTAMP_MASA_DEPAN");
-    }
-  }
-
-  // 4. Cek koordinat yang terlalu "bulat" (fake GPS sering rounded)
-  const latStr = lat.toString();
-  const lonStr = lon.toString();
-  const latDecimals = latStr.includes(".") ? latStr.split(".")[1].length : 0;
-  const lonDecimals = lonStr.includes(".") ? lonStr.split(".")[1].length : 0;
-  if (latDecimals <= 2 || lonDecimals <= 2) {
-    flags.push("KOORDINAT_TERLALU_BULAT");
-  }
-
-  // Tentukan status validasi berdasarkan flags
-  let validasi;
-  if (flags.includes("DI_LUAR_RADIUS")) {
-    validasi = "DI_LUAR_RADIUS";
-  } else if (flags.length >= 2) {
-    validasi = "KEMUNGKINAN_FAKE_GPS";
-  } else if (
-    flags.some((f) =>
-      [
-        "ACCURACY_NOL",
-        "ACCURACY_TERLALU_SEMPURNA",
-        "KOORDINAT_TERLALU_BULAT",
-      ].includes(f),
-    )
-  ) {
-    validasi = "LOKASI_MENCURIGAKAN";
-  } else if (
-    flags.some((f) => f === "GPS_TIDAK_AKURAT" || f === "ACCURACY_TIDAK_ADA")
-  ) {
-    validasi = "GPS_TIDAK_AKURAT";
-  } else if (flags.some((f) => f.startsWith("GPS_TIMESTAMP"))) {
-    validasi = "LOKASI_MENCURIGAKAN";
-  } else {
-    validasi = "VALID";
-  }
-
-  return { validasi, flags, distance };
-}
 
 // Ambil IP address dari request
 function getClientIP(req) {
@@ -457,23 +374,6 @@ app.post(
 
       const settings = await getSettings();
 
-      // === VALIDASI LOKASI BERLAPIS (SERVER-SIDE) ===
-      const { validasi, flags, distance } = validateLocation(
-        lat,
-        lon,
-        acc,
-        gpsTs,
-        settings,
-      );
-
-      // Jika di luar radius → DITOLAK langsung
-      if (validasi === "DI_LUAR_RADIUS") {
-        return res.status(400).json({
-          error: `Anda berada di luar radius absen. Jarak Anda: ${distance.toFixed(0)}m (maks. ${settings.MAX_RADIUS}m)`,
-          validasi_lokasi: "DI_LUAR_RADIUS",
-        });
-      }
-
       // Cek sudah absen hari ini
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -499,14 +399,10 @@ app.post(
       const isLate = checkIsLate(settings.BATAS_TERLAMBAT);
       const clientIP = getClientIP(req);
 
-      // Tentukan status berdasarkan validasi
-      let status;
-      if (validasi === "VALID") {
-        status = isLate ? "TERLAMBAT" : "HADIR";
-      } else {
-        // Lokasi mencurigakan → masuk PENDING
-        status = "PENDING";
-      }
+      // Hitung jarak murni untuk data
+      const distance = getDistance(lat, lon, settings.OFFICE_LAT, settings.OFFICE_LON);
+
+      const status = isLate ? "TERLAMBAT" : "HADIR";
 
       const attendance = await prisma.attendance.create({
         data: {
@@ -519,27 +415,16 @@ app.post(
           device_info: device_info || null,
           ip_address: clientIP,
           foto_selfie: fotoPath,
-          // Anti-Fake GPS data
+          // Anti-Fake GPS data (Hanya untuk log, bukan untuk blokir/pending)
           accuracy: acc,
           gps_timestamp: gpsTs,
           jarak_dari_titik: parseFloat(distance.toFixed(2)),
           browser: browser || null,
           platform: platform || null,
-          validasi_lokasi: validasi,
-          alasan_flag: flags.length > 0 ? flags.join(", ") : null,
         },
       });
 
-      // Response berbeda berdasarkan status
-      if (status === "PENDING") {
-        res.json({
-          ...attendance,
-          status,
-          warning: `Absensi Anda tercatat tetapi masuk antrian verifikasi admin karena: ${flags.join(", ")}. Silakan tunggu persetujuan dari admin.`,
-        });
-      } else {
-        res.json({ ...attendance, status });
-      }
+      res.json({ ...attendance, status });
     } catch (error) {
       console.error("[ATTENDANCE ERROR]", error);
       res.status(500).json({ error: "Server error" });
@@ -563,14 +448,6 @@ app.get("/api/attendance", authMiddleware, async (req, res) => {
       if (req.query.kelas && req.query.kelas !== "Semua Kelas") {
         filters.user = { kelas: req.query.kelas };
       }
-      // Admin filter by validasi
-      if (req.query.validasi && req.query.validasi !== "Semua") {
-        if (req.query.validasi === "MENCURIGAKAN") {
-          filters.validasi_lokasi = { not: "VALID" };
-        } else {
-          filters.validasi_lokasi = req.query.validasi;
-        }
-      }
     }
 
     const records = await prisma.attendance.findMany({
@@ -589,104 +466,6 @@ app.get("/api/attendance", authMiddleware, async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
-// =============================================
-// ATTENDANCE — PENDING LIST (Admin Only)
-// =============================================
-
-app.get(
-  "/api/attendance/pending",
-  authMiddleware,
-  adminOnly,
-  async (req, res) => {
-    try {
-      const records = await prisma.attendance.findMany({
-        where: {
-          status: "PENDING",
-          admin_action: null,
-        },
-        include: {
-          user: {
-            select: { name: true, username: true, kelas: true, npm: true },
-          },
-        },
-        orderBy: { created_at: "desc" },
-      });
-
-      res.json(records);
-    } catch (error) {
-      console.error("[GET PENDING ERROR]", error);
-      res.status(500).json({ error: "Server error" });
-    }
-  },
-);
-
-// =============================================
-// ATTENDANCE — VERIFY (Admin approve/reject)
-// =============================================
-
-app.put(
-  "/api/attendance/:id/verify",
-  authMiddleware,
-  adminOnly,
-  async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { action, note } = req.body;
-
-      if (!action || !["APPROVED", "REJECTED"].includes(action)) {
-        return res
-          .status(400)
-          .json({ error: "Action harus APPROVED atau REJECTED" });
-      }
-
-      const attendance = await prisma.attendance.findUnique({
-        where: { id_absensi: parseInt(id) },
-      });
-
-      if (!attendance) {
-        return res.status(404).json({ error: "Data absensi tidak ditemukan" });
-      }
-
-      let newStatus = attendance.status;
-      if (action === "APPROVED") {
-        // Tentukan status berdasarkan jam absen asli
-        const settings = await getSettings();
-        const jamAbsen = new Date(attendance.jam_absen);
-        const [batasH, batasM] =
-          settings.BATAS_TERLAMBAT.split(":").map(Number);
-        const isLate =
-          jamAbsen.getHours() > batasH ||
-          (jamAbsen.getHours() === batasH && jamAbsen.getMinutes() >= batasM);
-        newStatus = isLate ? "TERLAMBAT" : "HADIR";
-      }
-      // Jika REJECTED, status tetap PENDING tapi admin_action = REJECTED
-
-      const updated = await prisma.attendance.update({
-        where: { id_absensi: parseInt(id) },
-        data: {
-          status: action === "APPROVED" ? newStatus : "PENDING",
-          admin_action: action,
-          admin_note: note || null,
-        },
-        include: {
-          user: { select: { name: true, kelas: true, npm: true } },
-        },
-      });
-
-      res.json({
-        message:
-          action === "APPROVED"
-            ? `Absensi ${updated.user.name} disetujui sebagai ${newStatus}`
-            : `Absensi ${updated.user.name} ditolak`,
-        attendance: updated,
-      });
-    } catch (error) {
-      console.error("[VERIFY ERROR]", error);
-      res.status(500).json({ error: "Server error" });
-    }
-  },
-);
 
 // =============================================
 // ATTENDANCE — DELETE (Admin Only)
@@ -730,12 +509,6 @@ app.get(
       const terlambat = todayAttendances.filter(
         (a) => a.status === "TERLAMBAT",
       ).length;
-      const pending = todayAttendances.filter(
-        (a) => a.status === "PENDING",
-      ).length;
-      const mencurigakan = todayAttendances.filter(
-        (a) => a.validasi_lokasi !== "VALID",
-      ).length;
 
       const byKelas = {};
       const classes = ["MI 4A", "MI 4B", "MI 4C", "MI 4D"];
@@ -745,19 +518,11 @@ app.get(
         ).length;
       }
 
-      // Total pending (semua hari, belum di-action)
-      const totalPending = await prisma.attendance.count({
-        where: { status: "PENDING", admin_action: null },
-      });
-
       res.json({
         totalToday,
         hadir,
         terlambat,
-        pending,
-        mencurigakan,
         byKelas,
-        totalPending,
       });
     } catch (error) {
       res.status(500).json({ error: "Server error" });
