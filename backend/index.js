@@ -15,17 +15,16 @@ const SECRET_KEY = process.env.JWT_SECRET || "smartattendance_timdis_2024";
 // =============================================
 // CORS — Izinkan frontend (Vercel) & lokal dev
 // =============================================
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:3000",
-  process.env.FRONTEND_URL,
-].filter(Boolean);
-
 app.use(cors({
   origin: function (origin, callback) {
     // Izinkan request tanpa origin (Postman, curl, mobile app)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    // Izinkan semua subdomain vercel.app dan localhost
+    if (
+      origin.includes("vercel.app") ||
+      origin.includes("localhost") ||
+      origin === process.env.FRONTEND_URL
+    ) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS: " + origin));
