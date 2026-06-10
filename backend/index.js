@@ -975,8 +975,10 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-// Hanya jalankan server jika bukan di Vercel (serverless)
-if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
+// Jalankan server HANYA di lokal (bukan di environment serverless)
+// Netlify set NETLIFY=true, Vercel set VERCEL=1, Lambda set AWS_LAMBDA_FUNCTION_NAME
+const isServerless = process.env.NETLIFY || process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+if (!isServerless && process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {
     console.log(`Server Smart Attendance berjalan di port ${PORT}`);
   });
