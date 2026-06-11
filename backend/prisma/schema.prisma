@@ -42,6 +42,7 @@ model Attendance {
   jarak_dari_titik Float?    // Jarak user dari titik apel (meter)
   browser          String?   // Nama browser
   platform         String?   // Platform/OS (Android, iOS, Windows, dll)
+  nama_lokasi_aktif String?  // Nama lokasi tempat absen
   created_at       DateTime  @default(now())
   updated_at       DateTime  @updatedAt
 }

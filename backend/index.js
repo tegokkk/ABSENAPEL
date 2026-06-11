@@ -577,8 +577,33 @@ app.post(
       const isLate = checkIsLate(settings.BATAS_TERLAMBAT);
       const clientIP = getClientIP(req);
 
+      if (!lat || !lon) {
+        return res.status(400).json({ success: false, message: "Lokasi tidak tersedia atau izin lokasi ditolak" });
+      }
+
+      if (acc && acc > 100) {
+        return res.status(400).json({ success: false, message: "Akurasi lokasi terlalu rendah. Aktifkan GPS akurasi tinggi." });
+      }
+
+      const activeLocation = await prisma.lokasiAbsen.findFirst({
+        where: { is_active: true }
+      });
+
+      if (!activeLocation) {
+         return res.status(400).json({ success: false, message: "Lokasi aktif admin belum dipilih." });
+      }
+
       // Hitung jarak murni untuk data
-      const distance = getDistance(lat, lon, settings.OFFICE_LAT, settings.OFFICE_LON);
+      const distance = getDistance(lat, lon, activeLocation.latitude, activeLocation.longitude);
+
+      if (distance > activeLocation.radius_meter) {
+         return res.status(400).json({ 
+           success: false, 
+           message: "Anda berada di luar area lokasi apel. Silakan absen di lokasi yang sudah ditentukan.",
+           distance: Math.round(distance),
+           allowedRadius: activeLocation.radius_meter
+         });
+      }
 
       const status = isLate ? "TERLAMBAT" : "HADIR";
 
@@ -599,10 +624,18 @@ app.post(
           jarak_dari_titik: parseFloat(distance.toFixed(2)),
           browser: browser || null,
           platform: platform || null,
+          nama_lokasi_aktif: activeLocation.nama_lokasi,
         },
       });
 
-      res.json({ ...attendance, status });
+      res.json({ 
+        success: true, 
+        message: "Absen apel berhasil.", 
+        distance: Math.round(distance), 
+        allowedRadius: activeLocation.radius_meter,
+        ...attendance, 
+        status 
+      });
     } catch (error) {
       console.error("[ATTENDANCE ERROR]", error);
       res.status(500).json({ error: "Server error" });

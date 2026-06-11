@@ -149,7 +149,13 @@ export default function UserDashboard({ user }) {
       fetchAttendances();
       setImgSrc(null);
     } catch (err) {
-      setMessage({ type: 'error', text: err.response?.data?.error || 'Terjadi kesalahan pada server' });
+      const data = err.response?.data || {};
+      const errMsg = data.message || data.error || 'Terjadi kesalahan pada server';
+      let fullMsg = errMsg;
+      if (data.distance != null && data.allowedRadius != null) {
+        fullMsg = `${errMsg} (Jarak Anda: ${data.distance}m, Maksimal: ${data.allowedRadius}m)`;
+      }
+      setMessage({ type: 'error', text: fullMsg });
     } finally {
       setLoading(false);
     }
