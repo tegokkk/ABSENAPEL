@@ -16,20 +16,32 @@ async function main() {
   await prisma.attendance.deleteMany();
   await prisma.user.deleteMany();
   await prisma.settings.deleteMany();
+  await prisma.lokasiAbsen.deleteMany();
   console.log("   ✅ Data lama dihapus\n");
 
   // 2. Settings default
   console.log("⚙️  Membuat settings default...");
   const defaultSettings = [
-    { key: "OFFICE_LAT",      value: "-5.367235"  },
-    { key: "OFFICE_LON",      value: "105.226727" },
-    { key: "MAX_RADIUS",      value: "100"        },
-    { key: "BATAS_TERLAMBAT", value: "08:00"      },
+    { key: "BATAS_TERLAMBAT", value: "08:00" },
   ];
   for (const s of defaultSettings) {
     await prisma.settings.create({ data: s });
   }
   console.log("   ✅ Settings dibuat\n");
+
+  // 3. Lokasi default
+  console.log("📍 Membuat lokasi default...");
+  await prisma.lokasiAbsen.create({
+    data: {
+      nama_lokasi: "Lapangan GSG Polinela",
+      latitude: -5.3569503,
+      longitude: 105.2317229,
+      radius_meter: 100,
+      is_active: true,
+      is_default: true,
+    },
+  });
+  console.log("   ✅ Lokasi default dibuat (Lapangan GSG Polinela)\n");
 
   // 3. Admin
   console.log("👔 Membuat akun admin...");
@@ -182,6 +194,7 @@ async function main() {
   console.log(`   Admin   : 2 (TIMDIS1, TIMDIS2)`);
   console.log(`   Mahasiswa: ${students.length}`);
   console.log(`   Kelas   : MI 4A (31), MI 4B (25), MI 4C (21), MI 4D (25)`);
+  console.log(`   Lokasi Default: Lapangan GSG Polinela`);
 }
 
 main()

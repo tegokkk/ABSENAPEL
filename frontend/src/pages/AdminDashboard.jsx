@@ -649,29 +649,47 @@ function TabUsers() {
 }
 
 // ============================================================
-// TAB PENGATURAN
+// TAB PENGATURAN — Lokasi Titik Apel + Pengaturan Waktu
 // ============================================================
 function TabSettings() {
-  const [form, setForm] = useState({ OFFICE_LAT: '', OFFICE_LON: '', MAX_RADIUS: '', BATAS_TERLAMBAT: '' });
+  const [locations, setLocations] = useState([]);
+  const [activeLocationId, setActiveLocationId] = useState(null);
+  const [batasTerlambat, setBatasTerlambat] = useState('08:00');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
 
-  const [saveLocked, guardSave] = useButtonGuard(1500);
+  // Form tambah / edit lokasi
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [form, setForm] = useState({ nama_lokasi: '', latitude: '', longitude: '', radius_meter: '100' });
+  const [formLoading, setFormLoading] = useState(false);
+  const [formError, setFormError] = useState('');
 
-  const fetchSettings = async () => {
+  const [saveLocked, guardSave] = useButtonGuard(1500);
+  const [actionLocked, guardAction] = useButtonGuard(1000);
+
+  // Fetch semua data
+  const fetchData = async () => {
     try {
-      const res = await axios.get(`${API}/settings`, { headers: headers() });
-      setForm({ OFFICE_LAT: res.data.OFFICE_LAT, OFFICE_LON: res.data.OFFICE_LON, MAX_RADIUS: res.data.MAX_RADIUS, BATAS_TERLAMBAT: res.data.BATAS_TERLAMBAT });
+      const [settingsRes, lokasiRes] = await Promise.all([
+        axios.get(`${API}/settings`, { headers: headers() }),
+        axios.get(`${API}/lokasi`, { headers: headers() }),
+      ]);
+      setBatasTerlambat(settingsRes.data.BATAS_TERLAMBAT || '08:00');
+      setLocations(lokasiRes.data);
+      const activeLoc = lokasiRes.data.find(l => l.is_active);
+      if (activeLoc) setActiveLocationId(activeLoc.id);
     } catch {}
   };
 
-  useEffect(() => { fetchSettings(); }, []);
+  useEffect(() => { fetchData(); }, []);
 
-  const handleSave = guardSave(async () => {
+  // Simpan BATAS_TERLAMBAT
+  const handleSaveSettings = guardSave(async () => {
     setLoading(true); setMsg(''); setError('');
     try {
-      const res = await axios.put(`${API}/settings`, form, { headers: headers() });
+      const res = await axios.put(`${API}/settings`, { BATAS_TERLAMBAT: batasTerlambat }, { headers: headers() });
       setMsg(res.data.message);
       setTimeout(() => setMsg(''), 4000);
     } catch (err) {
@@ -681,58 +699,246 @@ function TabSettings() {
     }
   });
 
+  // Aktifkan lokasi
+  const handleActivate = guardAction(async (id) => {
+    try {
+      await axios.put(`${API}/lokasi/${id}/activate`, {}, { headers: headers() });
+      setMsg('Lokasi berhasil diaktifkan');
+      setTimeout(() => setMsg(''), 3000);
+      fetchData();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Gagal mengaktifkan lokasi');
+    }
+  });
+
+  // Buka form tambah lokasi
+  const openAddForm = () => {
+    setEditId(null);
+    setForm({ nama_lokasi: '', latitude: '', longitude: '', radius_meter: '100' });
+    setFormError('');
+    setShowForm(true);
+  };
+
+  // Buka form edit lokasi
+  const openEditForm = (loc) => {
+    setEditId(loc.id);
+    setForm({
+      nama_lokasi: loc.nama_lokasi,
+      latitude: String(loc.latitude),
+      longitude: String(loc.longitude),
+      radius_meter: String(loc.radius_meter),
+    });
+    setFormError('');
+    setShowForm(true);
+  };
+
+  // Simpan / edit lokasi
+  const handleSubmitLocation = guardAction(async () => {
+    if (!form.nama_lokasi || !form.latitude || !form.longitude) {
+      setFormError('Nama lokasi, latitude, dan longitude wajib diisi');
+      return;
+    }
+    setFormLoading(true);
+    setFormError('');
+    try {
+      if (editId) {
+        await axios.put(`${API}/lokasi/${editId}`, form, { headers: headers() });
+        setMsg('Lokasi berhasil diperbarui');
+      } else {
+        await axios.post(`${API}/lokasi`, form, { headers: headers() });
+        setMsg('Lokasi berhasil ditambahkan');
+      }
+      setShowForm(false);
+      setTimeout(() => setMsg(''), 3000);
+      fetchData();
+    } catch (err) {
+      setFormError(err.response?.data?.error || 'Gagal menyimpan lokasi');
+    } finally {
+      setFormLoading(false);
+    }
+  });
+
+  // Hapus lokasi
+  const handleDeleteLocation = guardAction(async (loc) => {
+    if (loc.is_default) {
+      setError('Lokasi default tidak dapat dihapus');
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+    if (!confirm(`Hapus lokasi "${loc.nama_lokasi}"?`)) return;
+    try {
+      await axios.delete(`${API}/lokasi/${loc.id}`, { headers: headers() });
+      setMsg('Lokasi berhasil dihapus');
+      setTimeout(() => setMsg(''), 3000);
+      fetchData();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Gagal menghapus lokasi');
+    }
+  });
+
   return (
-    <div className="max-w-2xl">
-      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-6">
+    <div className="max-w-3xl space-y-6">
+      {/* === Pilih Lokasi Aktif === */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-bold text-slate-800 text-base">Lokasi Titik Apel Aktif</h3>
+            <p className="text-sm text-slate-400 mt-1">Pilih lokasi yang digunakan saat mahasiswa melakukan absen apel.</p>
+          </div>
+          <button
+            onClick={openAddForm}
+            className="flex items-center gap-1.5 px-4 py-2 bg-sky-600 text-white rounded-xl text-sm font-semibold hover:bg-sky-700 transition-all shadow-sm"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Tambah Lokasi
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          {locations.length === 0 ? (
+            <div className="p-6 text-center text-slate-400 text-sm bg-slate-50 rounded-xl">
+              Belum ada lokasi. Silakan tambah lokasi baru.
+            </div>
+          ) : (
+            locations.map(loc => {
+              const isActive = loc.id === activeLocationId;
+              return (
+                <div
+                  key={loc.id}
+                  className={`p-4 rounded-xl border transition-all ${
+                    isActive
+                      ? 'bg-sky-50 border-sky-300 shadow-sm'
+                      : 'bg-white border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-bold text-slate-800 text-sm">{loc.nama_lokasi}</h4>
+                        {isActive && (
+                          <span className="px-2 py-0.5 bg-sky-600 text-white rounded-full text-[10px] font-bold">AKTIF</span>
+                        )}
+                        {loc.is_default && (
+                          <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold border border-amber-200">DEFAULT</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4 mt-1.5 text-xs text-slate-500 font-mono">
+                        <span>Lat: {loc.latitude}</span>
+                        <span>Lng: {loc.longitude}</span>
+                        <span>Radius: {loc.radius_meter}m</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5 shrink-0">
+                      {!isActive && (
+                        <button
+                          onClick={() => handleActivate(loc.id)}
+                          className="px-3 py-1.5 text-xs bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-all font-semibold"
+                        >
+                          Aktifkan
+                        </button>
+                      )}
+                      <button
+                        onClick={() => openEditForm(loc)}
+                        className="px-3 py-1.5 text-xs bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-all font-semibold border border-blue-100"
+                      >
+                        Edit
+                      </button>
+                      {!loc.is_default && (
+                        <button
+                          onClick={() => handleDeleteLocation(loc)}
+                          className="px-3 py-1.5 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all font-semibold border border-red-100"
+                        >
+                          Hapus
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* === Modal Form Tambah / Edit Lokasi === */}
+      {showForm && (
+        <Modal title={editId ? 'Edit Lokasi' : 'Tambah Lokasi Baru'} onClose={() => setShowForm(false)}>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Nama Lokasi</label>
+              <input type="text" value={form.nama_lokasi} onChange={e => setForm({ ...form, nama_lokasi: e.target.value })}
+                placeholder="Contoh: Lapangan GSG Polinela"
+                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition-all" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Latitude</label>
+                <input type="number" step="any" value={form.latitude} onChange={e => setForm({ ...form, latitude: e.target.value })}
+                  placeholder="-5.3569503"
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition-all" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Longitude</label>
+                <input type="number" step="any" value={form.longitude} onChange={e => setForm({ ...form, longitude: e.target.value })}
+                  placeholder="105.2317229"
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition-all" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Radius Absen (meter)</label>
+              <input type="number" min="10" max="5000" value={form.radius_meter} onChange={e => setForm({ ...form, radius_meter: e.target.value })}
+                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition-all" />
+              <p className="text-xs text-slate-400 mt-1">Jarak maksimal mahasiswa dari titik ini agar absen diterima.</p>
+            </div>
+            {formError && <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{formError}</div>}
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setShowForm(false)} className="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-all text-sm">
+                Batal
+              </button>
+              <button onClick={handleSubmitLocation} disabled={formLoading}
+                className="flex-1 py-2.5 bg-sky-600 text-white rounded-xl font-semibold hover:bg-sky-700 transition-all text-sm disabled:opacity-50">
+                {formLoading ? 'Menyimpan...' : editId ? 'Simpan Perubahan' : 'Tambah Lokasi'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* === Batas Jam Tepat Waktu === */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
         <div>
-          <h3 className="font-bold text-slate-800 text-base mb-1">Lokasi Titik Apel</h3>
-          <p className="text-sm text-slate-400">Koordinat lokasi tempat mahasiswa harus berada saat absen.</p>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Latitude</label>
-            <input type="number" step="any" value={form.OFFICE_LAT} onChange={e => setForm({ ...form, OFFICE_LAT: e.target.value })}
-              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition-all" placeholder="-5.367235" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Longitude</label>
-            <input type="number" step="any" value={form.OFFICE_LON} onChange={e => setForm({ ...form, OFFICE_LON: e.target.value })}
-              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition-all" placeholder="105.226727" />
-          </div>
-        </div>
-        <div className="border-t border-slate-100 pt-5">
-          <h3 className="font-bold text-slate-800 text-base mb-1">Radius Absen</h3>
-          <p className="text-sm text-slate-400 mb-4">Jarak maksimal mahasiswa dari titik apel agar absen diterima.</p>
-          <div className="flex items-center gap-3">
-            <input type="number" min="10" max="5000" value={form.MAX_RADIUS} onChange={e => setForm({ ...form, MAX_RADIUS: e.target.value })}
-              className="w-40 px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition-all" />
-            <span className="text-slate-500 text-sm font-medium">meter</span>
-          </div>
-        </div>
-        <div className="border-t border-slate-100 pt-5">
           <h3 className="font-bold text-slate-800 text-base mb-1">Batas Jam Tepat Waktu</h3>
           <p className="text-sm text-slate-400 mb-4">Mahasiswa yang absen setelah jam ini akan dicatat sebagai TERLAMBAT.</p>
           <div className="flex items-center gap-3">
-            <input type="time" value={form.BATAS_TERLAMBAT} onChange={e => setForm({ ...form, BATAS_TERLAMBAT: e.target.value })}
+            <input type="time" value={batasTerlambat} onChange={e => setBatasTerlambat(e.target.value)}
               className="w-40 px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none transition-all" />
             <span className="text-slate-500 text-sm">WIB</span>
           </div>
         </div>
-        {msg && <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 text-sm font-medium">{msg}</div>}
-        {error && <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{error}</div>}
-        <div className="flex gap-3 pt-1">
-          <button onClick={fetchSettings} className="px-5 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-all text-sm">Reset</button>
-          <button id="btn-save-settings" onClick={handleSave} disabled={loading}
-            className="px-6 py-2.5 bg-sky-600 text-white rounded-xl font-semibold hover:bg-sky-700 transition-all text-sm shadow-sm disabled:opacity-50">
-            {loading ? 'Menyimpan...' : 'Simpan Pengaturan'}
-          </button>
-        </div>
       </div>
-      <div className="mt-4 p-4 bg-sky-50 border border-sky-100 rounded-2xl">
+
+      {/* Messages */}
+      {msg && <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 text-sm font-medium">{msg}</div>}
+      {error && <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">{error}</div>}
+
+      {/* Tombol Simpan Pengaturan */}
+      <div className="flex gap-3">
+        <button onClick={fetchData} className="px-5 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-all text-sm">
+          Muat Ulang
+        </button>
+        <button id="btn-save-settings" onClick={handleSaveSettings} disabled={loading}
+          className="px-6 py-2.5 bg-sky-600 text-white rounded-xl font-semibold hover:bg-sky-700 transition-all text-sm shadow-sm disabled:opacity-50">
+          {loading ? 'Menyimpan...' : 'Simpan Pengaturan'}
+        </button>
+      </div>
+
+      <div className="p-4 bg-sky-50 border border-sky-100 rounded-2xl">
         <p className="text-sm text-sky-700 font-medium">Catatan Penting</p>
         <p className="text-xs text-sky-600 mt-1">
-          Perubahan koordinat dan radius langsung berlaku untuk absensi berikutnya.
-          Pastikan koordinat sudah benar sebelum menyimpan. Gunakan Google Maps untuk mendapatkan koordinat yang tepat.
+          Lokasi aktif akan digunakan saat mahasiswa melakukan absen apel. Radius absen setiap lokasi bisa berbeda.
+          Gunakan Google Maps untuk mendapatkan koordinat yang tepat. Lokasi default tidak dapat dihapus.
         </p>
       </div>
     </div>

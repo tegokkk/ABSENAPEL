@@ -46,6 +46,18 @@ model Attendance {
   updated_at       DateTime  @updatedAt
 }
 
+model LokasiAbsen {
+  id           Int      @id @default(autoincrement())
+  nama_lokasi  String
+  latitude     Float
+  longitude    Float
+  radius_meter Float    @default(100)
+  is_active    Boolean  @default(false)
+  is_default   Boolean  @default(false)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+}
+
 model Settings {
   id    Int    @id @default(autoincrement())
   key   String @unique

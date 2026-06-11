@@ -64,11 +64,26 @@ async function getSettings() {
   const rows = await prisma.settings.findMany();
   const map = {};
   rows.forEach((r) => (map[r.key] = r.value));
+
+  // Ambil lokasi aktif
+  const activeLocation = await prisma.lokasiAbsen.findFirst({
+    where: { is_active: true },
+  });
+
   return {
-    OFFICE_LAT: parseFloat(map.OFFICE_LAT ?? "-5.367235"),
-    OFFICE_LON: parseFloat(map.OFFICE_LON ?? "105.226727"),
-    MAX_RADIUS: parseFloat(map.MAX_RADIUS ?? "100"),
+    OFFICE_LAT: activeLocation ? activeLocation.latitude : -5.3569503,
+    OFFICE_LON: activeLocation ? activeLocation.longitude : 105.2317229,
+    MAX_RADIUS: activeLocation ? activeLocation.radius_meter : 100,
     BATAS_TERLAMBAT: map.BATAS_TERLAMBAT ?? "08:00",
+    active_location: activeLocation
+      ? {
+          id: activeLocation.id,
+          nama_lokasi: activeLocation.nama_lokasi,
+          latitude: activeLocation.latitude,
+          longitude: activeLocation.longitude,
+          radius_meter: activeLocation.radius_meter,
+        }
+      : null,
   };
 }
 
@@ -193,17 +208,14 @@ app.get("/api/settings", authMiddleware, async (req, res) => {
 
 app.put("/api/settings", authMiddleware, adminOnly, async (req, res) => {
   try {
-    const { OFFICE_LAT, OFFICE_LON, MAX_RADIUS, BATAS_TERLAMBAT } = req.body;
-    const updates = { OFFICE_LAT, OFFICE_LON, MAX_RADIUS, BATAS_TERLAMBAT };
+    const { BATAS_TERLAMBAT } = req.body;
 
-    for (const [key, value] of Object.entries(updates)) {
-      if (value !== undefined && value !== null && value !== "") {
-        await prisma.settings.upsert({
-          where: { key },
-          update: { value: String(value) },
-          create: { key, value: String(value) },
-        });
-      }
+    if (BATAS_TERLAMBAT !== undefined && BATAS_TERLAMBAT !== null && BATAS_TERLAMBAT !== "") {
+      await prisma.settings.upsert({
+        where: { key: "BATAS_TERLAMBAT" },
+        update: { value: String(BATAS_TERLAMBAT) },
+        create: { key: "BATAS_TERLAMBAT", value: String(BATAS_TERLAMBAT) },
+      });
     }
 
     const newSettings = await getSettings();
@@ -213,6 +225,172 @@ app.put("/api/settings", authMiddleware, adminOnly, async (req, res) => {
     });
   } catch (error) {
     console.error("[SETTINGS ERROR]", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// =============================================
+// LOKASI ABSEN — CRUD (Admin Only)
+// =============================================
+
+// GET semua lokasi
+app.get("/api/lokasi", authMiddleware, async (req, res) => {
+  try {
+    const locations = await prisma.lokasiAbsen.findMany({
+      orderBy: [{ is_default: "desc" }, { nama_lokasi: "asc" }],
+    });
+    res.json(locations);
+  } catch (error) {
+    console.error("[LOKASI LIST ERROR]", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// POST tambah lokasi baru
+app.post("/api/lokasi", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { nama_lokasi, latitude, longitude, radius_meter } = req.body;
+
+    if (!nama_lokasi || latitude === undefined || longitude === undefined) {
+      return res
+        .status(400)
+        .json({ error: "Nama lokasi, latitude, dan longitude wajib diisi" });
+    }
+
+    const location = await prisma.lokasiAbsen.create({
+      data: {
+        nama_lokasi: nama_lokasi.trim(),
+        latitude: parseFloat(latitude),
+        longitude: parseFloat(longitude),
+        radius_meter: radius_meter ? parseFloat(radius_meter) : 100,
+      },
+    });
+
+    // Jika ini lokasi pertama, jadikan aktif
+    const count = await prisma.lokasiAbsen.count();
+    if (count === 1) {
+      await prisma.lokasiAbsen.update({
+        where: { id: location.id },
+        data: { is_active: true },
+      });
+      location.is_active = true;
+    }
+
+    res.status(201).json({
+      message: "Lokasi berhasil ditambahkan",
+      location,
+    });
+  } catch (error) {
+    console.error("[LOKASI CREATE ERROR]", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// PUT edit lokasi
+app.put("/api/lokasi/:id", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nama_lokasi, latitude, longitude, radius_meter } = req.body;
+
+    const existing = await prisma.lokasiAbsen.findUnique({
+      where: { id: parseInt(id) },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: "Lokasi tidak ditemukan" });
+    }
+
+    const updateData = {};
+    if (nama_lokasi) updateData.nama_lokasi = nama_lokasi.trim();
+    if (latitude !== undefined) updateData.latitude = parseFloat(latitude);
+    if (longitude !== undefined) updateData.longitude = parseFloat(longitude);
+    if (radius_meter !== undefined) updateData.radius_meter = parseFloat(radius_meter);
+
+    const location = await prisma.lokasiAbsen.update({
+      where: { id: parseInt(id) },
+      data: updateData,
+    });
+
+    res.json({ message: "Lokasi berhasil diperbarui", location });
+  } catch (error) {
+    console.error("[LOKASI UPDATE ERROR]", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// DELETE hapus lokasi (tidak bisa hapus lokasi default)
+app.delete("/api/lokasi/:id", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const existing = await prisma.lokasiAbsen.findUnique({
+      where: { id: parseInt(id) },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: "Lokasi tidak ditemukan" });
+    }
+    if (existing.is_default) {
+      return res
+        .status(400)
+        .json({ error: "Lokasi default tidak dapat dihapus" });
+    }
+
+    await prisma.lokasiAbsen.delete({ where: { id: parseInt(id) } });
+
+    // Jika yang dihapus adalah lokasi aktif, aktifkan lokasi default atau lokasi pertama
+    if (existing.is_active) {
+      const defaultLoc = await prisma.lokasiAbsen.findFirst({
+        where: { is_default: true },
+      });
+      if (defaultLoc) {
+        await prisma.lokasiAbsen.update({
+          where: { id: defaultLoc.id },
+          data: { is_active: true },
+        });
+      } else {
+        const firstLoc = await prisma.lokasiAbsen.findFirst();
+        if (firstLoc) {
+          await prisma.lokasiAbsen.update({
+            where: { id: firstLoc.id },
+            data: { is_active: true },
+          });
+        }
+      }
+    }
+
+    res.json({ message: "Lokasi berhasil dihapus" });
+  } catch (error) {
+    console.error("[LOKASI DELETE ERROR]", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// PUT aktifkan lokasi (nonaktifkan yang lain)
+app.put("/api/lokasi/:id/activate", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const existing = await prisma.lokasiAbsen.findUnique({
+      where: { id: parseInt(id) },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: "Lokasi tidak ditemukan" });
+    }
+
+    // Nonaktifkan semua lokasi
+    await prisma.lokasiAbsen.updateMany({
+      where: { is_active: true },
+      data: { is_active: false },
+    });
+
+    // Aktifkan lokasi yang dipilih
+    await prisma.lokasiAbsen.update({
+      where: { id: parseInt(id) },
+      data: { is_active: true },
+    });
+
+    res.json({ message: `Lokasi "${existing.nama_lokasi}" diaktifkan` });
+  } catch (error) {
+    console.error("[LOKASI ACTIVATE ERROR]", error);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -540,11 +718,11 @@ app.get("/api/seed", async (req, res) => {
     await prisma.attendance.deleteMany();
     await prisma.user.deleteMany();
 
+    // Hapus lokasi lama
+    await prisma.lokasiAbsen.deleteMany();
+
     // Inisialisasi settings default
     const defaultSettings = [
-      { key: "OFFICE_LAT", value: "-5.367235" },
-      { key: "OFFICE_LON", value: "105.226727" },
-      { key: "MAX_RADIUS", value: "100" },
       { key: "BATAS_TERLAMBAT", value: "08:00" },
     ];
 
@@ -552,6 +730,18 @@ app.get("/api/seed", async (req, res) => {
     for (const s of defaultSettings) {
       await prisma.settings.create({ data: s });
     }
+
+    // Buat lokasi default
+    await prisma.lokasiAbsen.create({
+      data: {
+        nama_lokasi: "Lapangan GSG Polinela",
+        latitude: -5.3569503,
+        longitude: 105.2317229,
+        radius_meter: 100,
+        is_active: true,
+        is_default: true,
+      },
+    });
 
     // Buat akun admin
     const admins = [
