@@ -541,13 +541,21 @@ app.post(
         browser,
         platform,
       } = req.body;
+      if (latitude === undefined || latitude === null || longitude === undefined || longitude === null || accuracy === undefined || accuracy === null) {
+        return res.status(400).json({ success: false, message: "Koordinat atau akurasi tidak lengkap. Pastikan GPS aktif." });
+      }
+
       const lat = parseFloat(latitude);
       const lon = parseFloat(longitude);
-      const acc = accuracy ? parseFloat(accuracy) : null;
+      const acc = parseFloat(accuracy);
       const gpsTs = gps_timestamp ? parseFloat(gps_timestamp) : null;
 
-      if (isNaN(lat) || isNaN(lon)) {
-        return res.status(400).json({ error: "Koordinat tidak valid" });
+      if (isNaN(lat) || isNaN(lon) || isNaN(acc)) {
+        return res.status(400).json({ success: false, message: "Format koordinat atau akurasi tidak valid." });
+      }
+
+      if (acc > 100) {
+        return res.status(400).json({ success: false, message: "Akurasi GPS terlalu rendah. Silakan aktifkan GPS akurasi tinggi." });
       }
 
       const settings = await getSettings();
@@ -566,44 +574,54 @@ app.post(
       if (existing) {
         return res
           .status(400)
-          .json({ error: "Anda sudah melakukan absen apel hari ini." });
+          .json({ success: false, message: "Anda sudah melakukan absen apel hari ini." });
       }
 
       if (!req.body.foto_selfie) {
-        return res.status(400).json({ error: "Foto selfie wajib disertakan" });
+        return res.status(400).json({ success: false, message: "Foto selfie wajib disertakan" });
       }
 
       const fotoPath = req.body.foto_selfie; // Base64 string from frontend
       const isLate = checkIsLate(settings.BATAS_TERLAMBAT);
       const clientIP = getClientIP(req);
 
-      if (!lat || !lon) {
-        return res.status(400).json({ success: false, message: "Lokasi tidak tersedia atau izin lokasi ditolak" });
-      }
-
-      if (acc && acc > 100) {
-        return res.status(400).json({ success: false, message: "Akurasi lokasi terlalu rendah. Aktifkan GPS akurasi tinggi." });
-      }
-
       const activeLocation = await prisma.lokasiAbsen.findFirst({
         where: { is_active: true }
       });
 
-      if (!activeLocation) {
-         return res.status(400).json({ success: false, message: "Lokasi aktif admin belum dipilih." });
+      if (!activeLocation || activeLocation.latitude == null || activeLocation.longitude == null || activeLocation.radius_meter == null) {
+         return res.status(400).json({ success: false, message: "Lokasi aktif admin belum dipilih atau tidak valid." });
       }
 
-      // Hitung jarak murni untuk data
-      const distance = getDistance(lat, lon, activeLocation.latitude, activeLocation.longitude);
+      const adminLat = parseFloat(activeLocation.latitude);
+      const adminLon = parseFloat(activeLocation.longitude);
+      const adminRadius = parseFloat(activeLocation.radius_meter);
 
-      if (distance > activeLocation.radius_meter) {
+      if (isNaN(adminLat) || isNaN(adminLon) || isNaN(adminRadius)) {
+        return res.status(400).json({ success: false, message: "Koordinat lokasi aktif admin tidak valid." });
+      }
+
+      // Hitung jarak menggunakan Haversine
+      const distance = getDistance(lat, lon, adminLat, adminLon);
+      const roundedDistance = Math.round(distance);
+
+      // --- LOGGING ---
+      console.log(`[ABSENSI] User ID: ${req.user.id}`);
+      console.log(`[ABSENSI] Lokasi User: Lat ${lat}, Lon ${lon}, Acc ±${acc}m`);
+      console.log(`[ABSENSI] Lokasi Admin: ${activeLocation.nama_lokasi} (Lat ${adminLat}, Lon ${adminLon}, Radius ${adminRadius}m)`);
+      console.log(`[ABSENSI] Jarak Terhitung: ${roundedDistance} meter`);
+
+      if (distance > adminRadius) {
+         console.log(`[ABSENSI] DITOLAK - Jarak melebihi radius.`);
          return res.status(400).json({ 
            success: false, 
-           message: "Anda berada di luar area lokasi apel. Silakan absen di lokasi yang sudah ditentukan.",
-           distance: Math.round(distance),
-           allowedRadius: activeLocation.radius_meter
+           message: "Anda berada di luar area lokasi apel.",
+           distance: roundedDistance,
+           allowedRadius: adminRadius
          });
       }
+
+      console.log(`[ABSENSI] DITERIMA - Insert ke database.`);
 
       const status = isLate ? "TERLAMBAT" : "HADIR";
 
@@ -618,7 +636,7 @@ app.post(
           device_info: device_info || null,
           ip_address: clientIP,
           foto_selfie: fotoPath,
-          // Anti-Fake GPS data (Hanya untuk log, bukan untuk blokir/pending)
+          // === Anti-Fake GPS Fields ===
           accuracy: acc,
           gps_timestamp: gpsTs,
           jarak_dari_titik: parseFloat(distance.toFixed(2)),
@@ -631,8 +649,8 @@ app.post(
       res.json({ 
         success: true, 
         message: "Absen apel berhasil.", 
-        distance: Math.round(distance), 
-        allowedRadius: activeLocation.radius_meter,
+        distance: roundedDistance, 
+        allowedRadius: adminRadius,
         ...attendance, 
         status 
       });

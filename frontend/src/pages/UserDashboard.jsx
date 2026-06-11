@@ -153,7 +153,7 @@ export default function UserDashboard({ user }) {
       const errMsg = data.message || data.error || 'Terjadi kesalahan pada server';
       let fullMsg = errMsg;
       if (data.distance != null && data.allowedRadius != null) {
-        fullMsg = `${errMsg} (Jarak Anda: ${data.distance}m, Maksimal: ${data.allowedRadius}m)`;
+        fullMsg = `Anda berada di luar area lokasi apel. Jarak Anda saat ini: ${data.distance} meter dari titik apel.`;
       }
       setMessage({ type: 'error', text: fullMsg });
     } finally {
