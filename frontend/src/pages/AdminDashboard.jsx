@@ -267,14 +267,16 @@ function TabAbsensi() {
                 <th className="px-4 py-3">Mahasiswa</th>
                 <th className="px-4 py-3">Waktu</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Jarak</th>
                 <th className="px-4 py-3">Foto</th>
+                <th className="px-4 py-3">Lokasi</th>
                 <th className="px-4 py-3 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {attendances.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan="8" className="px-4 py-12 text-center text-slate-400">
                     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="mx-auto mb-2 text-slate-200">
                       <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
                     </svg>
@@ -310,6 +312,18 @@ function TabAbsensi() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
+                      {a.jarak_dari_titik != null ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-mono font-semibold text-slate-600 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                          </svg>
+                          {a.jarak_dari_titik.toFixed(1)} m
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-300">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
                       {a.foto_selfie ? (
                         <img
                           src={a.foto_selfie}
@@ -318,6 +332,24 @@ function TabAbsensi() {
                           onClick={() => setSelectedPhoto(a.foto_selfie)}
                         />
                       ) : <span className="text-slate-300 text-xs">—</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      {a.latitude != null && a.longitude != null ? (
+                        <a
+                          href={`https://www.google.com/maps?q=${a.latitude},${a.longitude}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-sky-700 bg-sky-50 rounded-lg hover:bg-sky-100 hover:text-sky-800 transition-all font-medium border border-sky-200 whitespace-nowrap"
+                          title="Buka Google Maps"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                          </svg>
+                          Buka Maps
+                        </a>
+                      ) : (
+                        <span className="text-xs text-slate-400 italic">Lokasi tidak tersedia</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button
