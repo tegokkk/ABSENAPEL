@@ -3,8 +3,8 @@
 
 const serverless = require("serverless-http");
 
-// Load Express app dari backend utama
-const app = require("../../backend/index.js");
+// Load Express app dari backend modular
+const app = require("../../backend/src/app.js");
 
 // Export handler untuk Netlify
 module.exports.handler = serverless(app);
