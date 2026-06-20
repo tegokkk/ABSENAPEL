@@ -59,11 +59,11 @@ function TabAbsensi() {
 
   const fetchAttendances = useCallback(async (kelas) => {
     try {
-      let url = `${API}/attendance?`;
-      if (kelas && kelas !== 'Semua Kelas') url += `kelas=${encodeURIComponent(kelas)}&`;
       const data = await attendanceApi.getAttendance({ kelas: kelas !== 'Semua Kelas' ? kelas : undefined });
       setAttendances(data);
-    } catch {}
+    } catch (error) {
+      console.error("Gagal mengambil data absensi:", error);
+    }
   }, []);
 
   useEffect(() => {
@@ -711,11 +711,13 @@ function TabSettings() {
         settingsApi.getSettings(),
         lokasiApi.getLokasi(),
       ]);
-      setBatasTerlambat(settingsRes.data.BATAS_TERLAMBAT || '08:00');
-      setLocations(lokasiRes.data);
-      const activeLoc = lokasiRes.data.find(l => l.is_active);
+      setBatasTerlambat(settingsRes.BATAS_TERLAMBAT || '08:00');
+      setLocations(lokasiRes);
+      const activeLoc = lokasiRes.find(l => l.is_active);
       if (activeLoc) setActiveLocationId(activeLoc.id);
-    } catch {}
+    } catch (error) {
+      console.error("Gagal mengambil data pengaturan atau lokasi:", error);
+    }
   };
 
   useEffect(() => { fetchData(); }, []);
@@ -989,9 +991,11 @@ export default function AdminDashboard() {
 
   const fetchStats = async () => {
     try {
-      const res = await axios.get(`${API}/attendance/stats`, { headers: headers() });
-      setStats(res.data);
-    } catch {}
+      const data = await attendanceApi.getStats();
+      setStats(data);
+    } catch (error) {
+      console.error("Gagal mengambil stats absensi:", error);
+    }
   };
 
   useEffect(() => {
