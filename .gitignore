@@ -22,7 +22,8 @@ backend/prisma/dev.db
 backend/prisma/*.db-journal
 
 # Upload files lokal
-backend/uploads/
+backend/uploads/*
+!backend/uploads/.gitkeep
 
 # Netlify build cache
 .netlify

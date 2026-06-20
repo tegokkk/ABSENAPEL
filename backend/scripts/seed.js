@@ -17,6 +17,9 @@ async function main() {
   await prisma.user.deleteMany();
   await prisma.settings.deleteMany();
   await prisma.lokasiAbsen.deleteMany();
+  await prisma.kelas.deleteMany();
+  await prisma.programStudi.deleteMany();
+  await prisma.jurusan.deleteMany();
   console.log("   ✅ Data lama dihapus\n");
 
   // 2. Settings default
@@ -43,7 +46,29 @@ async function main() {
   });
   console.log("   ✅ Lokasi default dibuat (Lapangan GSG Polinela)\n");
 
-  // 3. Admin
+  // 4. Master Data Akademik
+  console.log("🏫 Membuat Master Data Akademik...");
+  const jurusan = await prisma.jurusan.create({
+    data: { nama: "Teknologi Informasi", singkatan: "TI" }
+  });
+  const programStudi = await prisma.programStudi.create({
+    data: { nama: "Manajemen Informatika", jurusanId: jurusan.id }
+  });
+  
+  const kelasMI4A = await prisma.kelas.create({ data: { nama_kelas: "MI 4A", programStudiId: programStudi.id } });
+  const kelasMI4B = await prisma.kelas.create({ data: { nama_kelas: "MI 4B", programStudiId: programStudi.id } });
+  const kelasMI4C = await prisma.kelas.create({ data: { nama_kelas: "MI 4C", programStudiId: programStudi.id } });
+  const kelasMI4D = await prisma.kelas.create({ data: { nama_kelas: "MI 4D", programStudiId: programStudi.id } });
+  
+  const kelasMap = {
+    "MI 4A": kelasMI4A.id,
+    "MI 4B": kelasMI4B.id,
+    "MI 4C": kelasMI4C.id,
+    "MI 4D": kelasMI4D.id,
+  };
+  console.log("   ✅ Master data akademik dibuat\n");
+
+  // 5. Admin
   console.log("👔 Membuat akun admin...");
   const admins = [
     { username: "TIMDIS1", password: "TIMDIS1", name: "Admin TIMDIS 1" },
@@ -60,7 +85,7 @@ async function main() {
   }
   console.log();
 
-  // 4. Mahasiswa
+  // 6. Mahasiswa
   const students = [
     // ===== MI 4A =====
     { name: "Abdur Rouf Hanafi",          npm: "24781001", kelas: "MI 4A" },
@@ -183,6 +208,7 @@ async function main() {
         name:     student.name,
         npm:      student.npm,
         kelas:    student.kelas,
+        kelasId:  kelasMap[student.kelas] || null,
         role:     "MAHASISWA",
       },
     });

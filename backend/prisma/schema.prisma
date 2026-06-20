@@ -13,38 +13,44 @@ datasource db {
 }
 
 model User {
-  id          Int          @id @default(autoincrement())
-  username    String       @unique
+  id          Int             @id @default(autoincrement())
+  username    String          @unique
   password    String
-  role        String       @default("MAHASISWA") // ADMIN or MAHASISWA
+  role        String          @default("MAHASISWA") // ADMIN or MAHASISWA
   name        String
-  npm         String?      @unique
-  kelas       String?      // e.g., "MI 4A", "MI 4B", null for ADMIN
+  npm         String?         @unique
+  kelas       String? // e.g., "MI 4A", "MI 4B", null for ADMIN
+  kelasId     Int?
+  kelasRef    Kelas?          @relation(fields: [kelasId], references: [id])
   attendances Attendance[]
+  izin        PengajuanIzin[]
+  logs        ActivityLog[]
 }
 
 model Attendance {
-  id_absensi       Int       @id @default(autoincrement())
-  userId           Int
-  user             User      @relation(fields: [userId], references: [id])
-  tanggal          DateTime  @default(now())
-  jam_absen        DateTime  @default(now())
-  status           String    // 'HADIR', 'TERLAMBAT', 'PENDING'
-  latitude         Float
-  longitude        Float
-  alamat_lokasi    String?
-  device_info      String?
-  ip_address       String?
-  foto_selfie      String?
+  id_absensi        Int         @id @default(autoincrement())
+  userId            Int
+  user              User        @relation(fields: [userId], references: [id])
+  jadwalId          Int?
+  jadwal            JadwalApel? @relation(fields: [jadwalId], references: [id])
+  tanggal           DateTime    @default(now())
+  jam_absen         DateTime    @default(now())
+  status            String // 'HADIR', 'TERLAMBAT', 'PENDING'
+  latitude          Float
+  longitude         Float
+  alamat_lokasi     String?
+  device_info       String?
+  ip_address        String?
+  foto_selfie       String?
   // === Anti-Fake GPS Fields ===
-  accuracy         Float?    // GPS accuracy dalam meter
-  gps_timestamp    Float?    // Timestamp GPS dari device (ms since epoch)
-  jarak_dari_titik Float?    // Jarak user dari titik apel (meter)
-  browser          String?   // Nama browser
-  platform         String?   // Platform/OS (Android, iOS, Windows, dll)
-  nama_lokasi_aktif String?  // Nama lokasi tempat absen
-  created_at       DateTime  @default(now())
-  updated_at       DateTime  @updatedAt
+  accuracy          Float? // GPS accuracy dalam meter
+  gps_timestamp     Float? // Timestamp GPS dari device (ms since epoch)
+  jarak_dari_titik  Float? // Jarak user dari titik apel (meter)
+  browser           String? // Nama browser
+  platform          String? // Platform/OS (Android, iOS, Windows, dll)
+  nama_lokasi_aktif String? // Nama lokasi tempat absen
+  created_at        DateTime    @default(now())
+  updated_at        DateTime    @updatedAt
 }
 
 model LokasiAbsen {
@@ -63,4 +69,72 @@ model Settings {
   id    Int    @id @default(autoincrement())
   key   String @unique
   value String
+}
+
+model Jurusan {
+  id           Int            @id @default(autoincrement())
+  nama         String         @unique
+  singkatan    String?
+  programStudi ProgramStudi[]
+  created_at   DateTime       @default(now())
+  updated_at   DateTime       @updatedAt
+}
+
+model ProgramStudi {
+  id         Int      @id @default(autoincrement())
+  nama       String
+  jurusanId  Int
+  jurusan    Jurusan  @relation(fields: [jurusanId], references: [id])
+  kelas      Kelas[]
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
+model Kelas {
+  id             Int          @id @default(autoincrement())
+  nama_kelas     String
+  programStudiId Int
+  programStudi   ProgramStudi @relation(fields: [programStudiId], references: [id])
+  users          User[]
+  created_at     DateTime     @default(now())
+  updated_at     DateTime     @updatedAt
+}
+
+model JadwalApel {
+  id            Int          @id @default(autoincrement())
+  nama_kegiatan String
+  waktu_mulai   DateTime
+  waktu_selesai DateTime
+  deskripsi     String?
+  is_active     Boolean      @default(true)
+  attendances   Attendance[]
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
+}
+
+model PengajuanIzin {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  user          User     @relation(fields: [userId], references: [id])
+  tanggal_awal  DateTime
+  tanggal_akhir DateTime
+  jenis_izin    String // 'SAKIT', 'IZIN', 'CUTI'
+  keterangan    String
+  lampiran_url  String?
+  status        String   @default("PENDING") // 'PENDING', 'APPROVED', 'REJECTED'
+  approved_by   Int?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+}
+
+model ActivityLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  user        User?    @relation(fields: [userId], references: [id])
+  action      String // 'CREATE', 'UPDATE', 'DELETE', 'LOGIN'
+  entity      String
+  entity_id   String?
+  description String
+  ip_address  String?
+  created_at  DateTime @default(now())
 }

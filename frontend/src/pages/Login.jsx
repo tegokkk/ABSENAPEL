@@ -1,8 +1,6 @@
 import { useState, useCallback } from 'react';
-import axios from 'axios';
 import { useButtonGuard } from '../hooks/useDebounce';
-
-const API_URL = import.meta.env.VITE_API_URL || '';
+import { authApi } from '../services/authApi';
 
 export default function Login({ onLogin }) {
   const [username, setUsername] = useState('');
@@ -23,12 +21,12 @@ export default function Login({ onLogin }) {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.post(`${API_URL}/api/login`, {
+      const data = await authApi.login({
         username: username.trim(),
         password: password.trim()
       });
-      localStorage.setItem('token', res.data.token);
-      onLogin(res.data.user);
+      localStorage.setItem('token', data.token);
+      onLogin(data.user);
     } catch (err) {
       setError(err.response?.data?.error || 'Terjadi kesalahan. Coba lagi.');
     } finally {

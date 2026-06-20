@@ -1,13 +1,16 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import axios from 'axios';
+import { attendanceApi } from '../services/attendanceApi';
+import { usersApi } from '../services/usersApi';
+import { lokasiApi } from '../services/lokasiApi';
+import { settingsApi } from '../services/settingsApi';
 import ExcelJS from 'exceljs';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useDebounce, useButtonGuard } from '../hooks/useDebounce';
+import TabMasterData from '../components/admin/TabMasterData';
+import TabJadwal from '../components/admin/TabJadwal';
+import TabIzin from '../components/admin/TabIzin';
 
-const API = `${import.meta.env.VITE_API_URL || ''}/api`;
-const token = () => localStorage.getItem('token');
-const headers = () => ({ Authorization: `Bearer ${token()}` });
 
 const CLASSES = ['MI 4A', 'MI 4B', 'MI 4C', 'MI 4D'];
 
@@ -58,8 +61,8 @@ function TabAbsensi() {
     try {
       let url = `${API}/attendance?`;
       if (kelas && kelas !== 'Semua Kelas') url += `kelas=${encodeURIComponent(kelas)}&`;
-      const res = await axios.get(url, { headers: headers() });
-      setAttendances(res.data);
+      const data = await attendanceApi.getAttendance({ kelas: kelas !== 'Semua Kelas' ? kelas : undefined });
+      setAttendances(data);
     } catch {}
   }, []);
 
@@ -72,7 +75,7 @@ function TabAbsensi() {
     if (!confirm('Yakin ingin menghapus data absensi ini?')) return;
     setDeleting(id);
     try {
-      await axios.delete(`${API}/attendance/${id}`, { headers: headers() });
+      await attendanceApi.deleteAttendance(id);
       fetchAttendances(debouncedKelas);
     } catch (err) {
       alert(err.response?.data?.error || 'Gagal menghapus');
@@ -404,8 +407,8 @@ function TabUsers() {
     try {
       let url = `${API}/users`;
       if (kelas && kelas !== 'Semua Kelas') url += `?kelas=${encodeURIComponent(kelas)}`;
-      const res = await axios.get(url, { headers: headers() });
-      setUsers(res.data);
+      const data = await usersApi.getUsers({ kelas: kelas !== 'Semua Kelas' ? kelas : undefined });
+      setUsers(data);
     } catch {}
   }, []);
 
@@ -454,10 +457,10 @@ function TabUsers() {
     setFormError('');
     try {
       if (editUser) {
-        await axios.put(`${API}/users/${editUser.id}`, form, { headers: headers() });
+        await usersApi.updateUser(editUser.id, form);
         setActionMsg('Data mahasiswa berhasil diperbarui');
       } else {
-        await axios.post(`${API}/users`, form, { headers: headers() });
+        await usersApi.createUser(form);
         setActionMsg('Mahasiswa berhasil ditambahkan');
       }
       setShowModal(false);
@@ -473,7 +476,7 @@ function TabUsers() {
   const handleDelete = guardAction(async (user) => {
     if (!confirm(`Hapus mahasiswa "${user.name}"?\nSeluruh data absensinya juga akan dihapus.`)) return;
     try {
-      await axios.delete(`${API}/users/${user.id}`, { headers: headers() });
+      await usersApi.deleteUser(user.id);
       setActionMsg('Mahasiswa berhasil dihapus');
       fetchUsers(debouncedFilterKelas);
       setTimeout(() => setActionMsg(''), 3000);
@@ -485,8 +488,8 @@ function TabUsers() {
   const handleResetPassword = guardAction(async (user) => {
     if (!confirm(`Reset password "${user.name}" ke NPM (${user.npm})?`)) return;
     try {
-      const res = await axios.put(`${API}/users/${user.id}/reset-password`, {}, { headers: headers() });
-      setActionMsg(res.data.message);
+      const data = await usersApi.resetPassword(user.id);
+      setActionMsg(data.message);
       setTimeout(() => setActionMsg(''), 3000);
     } catch (err) {
       alert(err.response?.data?.error || 'Gagal reset password');
@@ -705,8 +708,8 @@ function TabSettings() {
   const fetchData = async () => {
     try {
       const [settingsRes, lokasiRes] = await Promise.all([
-        axios.get(`${API}/settings`, { headers: headers() }),
-        axios.get(`${API}/lokasi`, { headers: headers() }),
+        settingsApi.getSettings(),
+        lokasiApi.getLokasi(),
       ]);
       setBatasTerlambat(settingsRes.data.BATAS_TERLAMBAT || '08:00');
       setLocations(lokasiRes.data);
@@ -721,8 +724,8 @@ function TabSettings() {
   const handleSaveSettings = guardSave(async () => {
     setLoading(true); setMsg(''); setError('');
     try {
-      const res = await axios.put(`${API}/settings`, { BATAS_TERLAMBAT: batasTerlambat }, { headers: headers() });
-      setMsg(res.data.message);
+      const data = await settingsApi.updateSettings({ BATAS_TERLAMBAT: batasTerlambat });
+      setMsg(data.message);
       setTimeout(() => setMsg(''), 4000);
     } catch (err) {
       setError(err.response?.data?.error || 'Gagal menyimpan pengaturan');
@@ -734,7 +737,7 @@ function TabSettings() {
   // Aktifkan lokasi
   const handleActivate = guardAction(async (id) => {
     try {
-      await axios.put(`${API}/lokasi/${id}/activate`, {}, { headers: headers() });
+      await lokasiApi.activateLokasi(id);
       setMsg('Lokasi berhasil diaktifkan');
       setTimeout(() => setMsg(''), 3000);
       fetchData();
@@ -774,10 +777,10 @@ function TabSettings() {
     setFormError('');
     try {
       if (editId) {
-        await axios.put(`${API}/lokasi/${editId}`, form, { headers: headers() });
+        await lokasiApi.updateLokasi(editId, form);
         setMsg('Lokasi berhasil diperbarui');
       } else {
-        await axios.post(`${API}/lokasi`, form, { headers: headers() });
+        await lokasiApi.createLokasi(form);
         setMsg('Lokasi berhasil ditambahkan');
       }
       setShowForm(false);
@@ -799,7 +802,7 @@ function TabSettings() {
     }
     if (!confirm(`Hapus lokasi "${loc.nama_lokasi}"?`)) return;
     try {
-      await axios.delete(`${API}/lokasi/${loc.id}`, { headers: headers() });
+      await lokasiApi.deleteLokasi(loc.id);
       setMsg('Lokasi berhasil dihapus');
       setTimeout(() => setMsg(''), 3000);
       fetchData();
@@ -1001,7 +1004,19 @@ export default function AdminDashboard() {
       icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
     },
     {
-      id: 'users', label: 'Manajemen Mahasiswa',
+      id: 'izin', label: 'Validasi Izin',
+      icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+    },
+    {
+      id: 'jadwal', label: 'Jadwal Apel',
+      icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    },
+    {
+      id: 'master', label: 'Data Akademik',
+      icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+    },
+    {
+      id: 'users', label: 'Mahasiswa',
       icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
     },
     {
@@ -1067,6 +1082,9 @@ export default function AdminDashboard() {
       {/* Tab Content */}
       <div>
         {activeTab === 'absensi' && <TabAbsensi />}
+        {activeTab === 'izin' && <TabIzin />}
+        {activeTab === 'jadwal' && <TabJadwal />}
+        {activeTab === 'master' && <TabMasterData />}
         {activeTab === 'users' && <TabUsers />}
         {activeTab === 'settings' && <TabSettings />}
       </div>

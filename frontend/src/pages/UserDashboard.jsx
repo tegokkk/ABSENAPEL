@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import axios from 'axios';
+import { attendanceApi } from '../services/attendanceApi';
+import { izinApi } from '../services/izinApi';
+import { settingsApi } from '../services/settingsApi';
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import Webcam from 'react-webcam';
@@ -7,7 +9,7 @@ import L from 'leaflet';
 import { useDebounceCallback, useButtonGuard } from '../hooks/useDebounce';
 
 
-const API_URL = import.meta.env.VITE_API_URL || '';
+
 
 // Fix Leaflet default icon
 delete L.Icon.Default.prototype._getIconUrl;
@@ -41,6 +43,7 @@ export default function UserDashboard({ user }) {
   const [location, setLocation] = useState(null);
   const [locationError, setLocationError] = useState('');
   const [attendances, setAttendances] = useState([]);
+  const [izins, setIzins] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [settings, setSettings] = useState({ OFFICE_LAT: -5.367235, OFFICE_LON: 105.226727, MAX_RADIUS: 100, BATAS_TERLAMBAT: '08:00' });
@@ -58,11 +61,56 @@ export default function UserDashboard({ user }) {
 
   const fetchSettings = async () => {
     try {
-      const res = await axios.get(`${API_URL}/api/settings`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
-      setSettings(res.data);
+      const data = await settingsApi.getSettings();
+      setSettings(data);
     } catch {}
+  };
+
+  const [showIzinModal, setShowIzinModal] = useState(false);
+  const [formIzin, setFormIzin] = useState({ tanggal_awal: '', tanggal_akhir: '', jenis_izin: 'Sakit', keterangan: '', lampiran_url: null });
+  const [lampiranPreview, setLampiranPreview] = useState(null);
+  const [izinLoading, setIzinLoading] = useState(false);
+
+  const handleLampiranChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    // Max 5MB
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Ukuran file terlalu besar. Maksimal 5MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setFormIzin(prev => ({ ...prev, lampiran_url: reader.result }));
+      setLampiranPreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const fetchIzins = async () => {
+    try {
+      const data = await izinApi.getIzins();
+      setIzins(data);
+    } catch {}
+  };
+
+  const submitIzin = async () => {
+    if (!formIzin.tanggal_awal || !formIzin.tanggal_akhir || !formIzin.keterangan) {
+      alert("Semua field harus diisi!"); return;
+    }
+    try {
+      setIzinLoading(true);
+      await izinApi.createIzin(formIzin);
+      setShowIzinModal(false);
+      setFormIzin({ tanggal_awal: '', tanggal_akhir: '', jenis_izin: 'Sakit', keterangan: '', lampiran_url: null });
+      setLampiranPreview(null);
+      fetchIzins();
+      alert("Pengajuan izin berhasil dibuat");
+    } catch(e) {
+      alert("Gagal mengajukan izin");
+    } finally {
+      setIzinLoading(false);
+    }
   };
 
   const _getLocationRaw = () => {
@@ -90,10 +138,8 @@ export default function UserDashboard({ user }) {
 
   const fetchAttendances = async () => {
     try {
-      const res = await axios.get(`${API_URL}/api/attendance`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
-      setAttendances(res.data);
+      const data = await attendanceApi.getAttendance();
+      setAttendances(data);
     } catch (err) {
       console.error('Failed to fetch attendance', err);
     }
@@ -101,6 +147,7 @@ export default function UserDashboard({ user }) {
 
   useEffect(() => {
     fetchAttendances();
+    fetchIzins();
     getLocation();
     fetchSettings();
   }, []);
@@ -132,12 +179,7 @@ export default function UserDashboard({ user }) {
         foto_selfie: imgSrc,
       };
 
-      const res = await axios.post(`${API_URL}/api/attendance/apel`, payload, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const res = await attendanceApi.submitApel(payload);
 
       const status = res.data.status;
       setMessage({
@@ -462,7 +504,139 @@ export default function UserDashboard({ user }) {
             </table>
           </div>
         </div>
+
+        {/* Riwayat Izin */}
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 mt-5">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-base font-bold flex items-center gap-2 text-slate-800">
+              <span className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                </svg>
+              </span>
+              Pengajuan Izin
+            </h2>
+            <button onClick={() => setShowIzinModal(true)} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-all">Ajukan Izin</button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-slate-500 text-xs">
+                <tr>
+                  <th className="px-4 py-3 font-semibold rounded-tl-xl">Tanggal</th>
+                  <th className="px-4 py-3 font-semibold">Jenis</th>
+                  <th className="px-4 py-3 font-semibold text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {izins.length === 0 ? (
+                  <tr><td colSpan="3" className="px-4 py-6 text-center text-slate-400">Belum ada riwayat izin.</td></tr>
+                ) : izins.map(i => (
+                  <tr key={i.id}>
+                    <td className="px-4 py-3 font-medium text-slate-700 text-xs">
+                      {new Date(i.tanggal_awal).toLocaleDateString('id-ID')} - {new Date(i.tanggal_akhir).toLocaleDateString('id-ID')}
+                    </td>
+                    <td className="px-4 py-3 text-slate-600 text-xs">{i.jenis_izin}</td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        i.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' :
+                        i.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {i.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
+
+      {showIzinModal && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-8 pb-8 bg-black/40 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 my-auto">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-slate-800">Form Pengajuan Izin</h3>
+            </div>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Mulai Tanggal</label>
+                  <input type="date" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" value={formIzin.tanggal_awal} onChange={e => setFormIzin({...formIzin, tanggal_awal: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Sampai Tanggal</label>
+                  <input type="date" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" value={formIzin.tanggal_akhir} onChange={e => setFormIzin({...formIzin, tanggal_akhir: e.target.value})} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Jenis Izin</label>
+                <select className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" value={formIzin.jenis_izin} onChange={e => setFormIzin({...formIzin, jenis_izin: e.target.value})}>
+                  <option value="Sakit">Sakit</option>
+                  <option value="Izin">Izin (Keperluan Lain)</option>
+                  <option value="Surat Tugas">Surat Tugas / Kegiatan Kampus</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Keterangan / Alasan</label>
+                <textarea rows="2" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" placeholder="Berikan keterangan jelas" value={formIzin.keterangan} onChange={e => setFormIzin({...formIzin, keterangan: e.target.value})}></textarea>
+              </div>
+
+              {/* Upload Bukti */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Bukti Pendukung
+                  <span className="ml-1 text-slate-400 font-normal">(Surat sakit, surat tugas, dll.)</span>
+                </label>
+                <label
+                  htmlFor="upload-lampiran"
+                  className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-indigo-200 rounded-xl bg-indigo-50/50 hover:bg-indigo-50 cursor-pointer transition-all group"
+                >
+                  {lampiranPreview ? (
+                    <div className="relative w-full h-full flex items-center justify-center p-2">
+                      <img src={lampiranPreview} alt="Preview lampiran" className="max-h-24 max-w-full object-contain rounded-lg shadow-sm" />
+                      <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); setLampiranPreview(null); setFormIzin(p => ({...p, lampiran_url: null})); }}
+                        className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold hover:bg-red-600"
+                      >✕</button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-1.5 text-indigo-400 group-hover:text-indigo-600 transition-colors">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                      </svg>
+                      <span className="text-xs font-medium">Klik untuk upload foto / gambar</span>
+                      <span className="text-[10px] text-indigo-300">JPG, PNG, maks. 5MB</span>
+                    </div>
+                  )}
+                </label>
+                <input
+                  id="upload-lampiran"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleLampiranChange}
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => { setShowIzinModal(false); setLampiranPreview(null); setFormIzin({ tanggal_awal: '', tanggal_akhir: '', jenis_izin: 'Sakit', keterangan: '', lampiran_url: null }); }} className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-semibold">Batal</button>
+                <button disabled={izinLoading} onClick={submitIzin} className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
+                  {izinLoading ? 'Mengirim...' : 'Ajukan Izin'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
