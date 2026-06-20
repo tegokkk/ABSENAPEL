@@ -405,11 +405,11 @@ function TabUsers() {
 
   const fetchUsers = useCallback(async (kelas) => {
     try {
-      let url = `${API}/users`;
-      if (kelas && kelas !== 'Semua Kelas') url += `?kelas=${encodeURIComponent(kelas)}`;
       const data = await usersApi.getUsers({ kelas: kelas !== 'Semua Kelas' ? kelas : undefined });
       setUsers(data);
-    } catch {}
+    } catch (error) {
+      console.error("Gagal mengambil data mahasiswa:", error);
+    }
   }, []);
 
   useEffect(() => { 
