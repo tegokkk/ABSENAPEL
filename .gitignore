@@ -1,3 +1,6 @@
+# Archive (file lama/backup, tidak perlu di-push)
+archive/
+
 # Logs
 logs
 *.log
