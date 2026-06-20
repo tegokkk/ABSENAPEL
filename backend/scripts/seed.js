@@ -11,9 +11,11 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("🌱 Memulai seed database...\n");
 
-  // 1. Hapus semua data lama
+  // 1. Hapus semua data lama (urutan harus sesuai foreign key)
   console.log("🗑️  Menghapus data lama...");
   await prisma.attendance.deleteMany();
+  await prisma.pengajuanIzin.deleteMany();  // harus sebelum user
+  await prisma.jadwalApel.deleteMany();
   await prisma.user.deleteMany();
   await prisma.settings.deleteMany();
   await prisma.lokasiAbsen.deleteMany();
@@ -21,6 +23,7 @@ async function main() {
   await prisma.programStudi.deleteMany();
   await prisma.jurusan.deleteMany();
   console.log("   ✅ Data lama dihapus\n");
+
 
   // 2. Settings default
   console.log("⚙️  Membuat settings default...");
