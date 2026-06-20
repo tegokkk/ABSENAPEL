@@ -1,37 +1,45 @@
-# Dokumentasi API
+# API Documentation
 
-Base URL untuk API: `/api`
+Base URL: `/api`
 
-## Authentication
-- `POST /api/login` - Melakukan autentikasi menggunakan username/npm dan password. Mengembalikan token JWT.
+## 1. Auth & Users
+- `POST /login`: Autentikasi user. Mengembalikan JWT token.
+- `GET /users`: Mengambil list semua mahasiswa (bisa di-filter berdasarkan kelas).
+- `POST /users`: Tambah mahasiswa baru.
+- `PUT /users/:id`: Edit mahasiswa.
+- `DELETE /users/:id`: Hapus mahasiswa (termasuk cascade data terkait).
+- `PUT /users/:id/reset-password`: Mengembalikan password mahasiswa ke NPM mereka.
 
-## Settings & Konfigurasi
-- `GET /api/settings` - Mengambil konfigurasi aplikasi (seperti jam batas terlambat).
-- `PUT /api/settings` - Memperbarui konfigurasi aplikasi (Admin only).
+## 2. Master Data Akademik
+- `GET /jurusan`, `POST /jurusan`, `DELETE /jurusan/:id`
+- `GET /program-studi`, `POST /program-studi`, `DELETE /program-studi/:id`
+- `GET /kelas`, `POST /kelas`, `DELETE /kelas/:id`
 
-## Master Data Akademik
-*Hanya dapat diakses dan diubah oleh ADMIN, kecuali GET.*
-- `GET/POST/PUT/DELETE /api/jurusan` - Manajemen data Jurusan.
-- `GET/POST/PUT/DELETE /api/program-studi` - Manajemen data Program Studi.
-- `GET/POST/PUT/DELETE /api/kelas` - Manajemen data Kelas.
-- `GET/POST/PUT/DELETE /api/lokasi` - Manajemen lokasi absen valid dan aktivasi titik pusat.
+## 3. Jadwal Apel
+- `GET /jadwal`: Mengambil semua jadwal apel.
+- `POST /jadwal`: Membuat jadwal apel baru.
+- `PUT /jadwal/:id/status`: Mengaktifkan/menonaktifkan jadwal apel.
+- `DELETE /jadwal/:id`
 
-## User Management
-- `GET/POST/PUT/DELETE /api/users` - CRUD data pengguna (Admin & Mahasiswa).
-- `PUT /api/users/:id/reset-password` - Melakukan reset password mahasiswa ke default (sama dengan NPM).
+## 4. Lokasi & Settings
+- `GET /settings`: Mengambil batas waktu terlambat (`BATAS_TERLAMBAT`).
+- `PUT /settings`: Mengubah batas waktu terlambat.
+- `GET /lokasi`: Mengambil semua titik kordinat absensi apel.
+- `POST /lokasi`: Menambah titik absensi baru.
+- `PUT /lokasi/:id/activate`: Mengubah titik lokasi aktif yang akan digunakan mahasiswa.
+- `DELETE /lokasi/:id`
 
-## Jadwal & Izin
-- `GET/POST/PUT/DELETE /api/jadwal` - Manajemen jadwal apel. Validasi absen mengecek apakah ada jadwal aktif pada rentang waktu tersebut.
-- `POST /api/izin` - Mahasiswa mengajukan izin (Sakit/Izin/Surat Tugas) dengan opsi upload gambar.
-- `GET /api/izin` - List pengajuan izin. Mahasiswa hanya melihat miliknya, Admin melihat semuanya.
-- `PUT /api/izin/:id/status` - Admin mengubah status izin (APPROVED/REJECTED).
+## 5. Izin
+- `GET /izin`: Mengambil semua list izin.
+- `POST /izin`: (Mahasiswa) Mengajukan izin baru.
+- `PUT /izin/:id/status`: (Admin) Mengubah status pengajuan menjadi APPROVED/REJECTED.
 
-## Attendance (Absensi)
-- `POST /api/attendance/apel` - Mahasiswa melakukan absensi. Wajib mengirim payload GPS dan foto selfie base64. Divalidasi dengan radius lokasi aktif.
-- `GET /api/attendance` - Mendapatkan daftar absensi (filter by kelas bagi Admin).
-- `GET /api/attendance/stats` - Statistik hari ini (Total hadir, terlambat, rekapitulasi kelas).
-- `DELETE /api/attendance/:id` - Hapus histori absensi tertentu (Admin only).
+## 6. Attendance (Absensi)
+- `GET /attendance`: Menarik data log absensi.
+- `POST /attendance/apel`: (Mahasiswa) Melakukan absensi apel. Memerlukan payload GPS dan foto selfie.
+- `DELETE /attendance/:id`: Hapus log absensi spesifik.
+- `GET /attendance/stats`: Menarik statistik absensi hari ini (Hadir, Terlambat).
 
-## Health & System
-- `GET /api/health` - Pengecekan server aktif dan validasi koneksi ke database.
-- `GET /api/seed` - Endpoint reset & seed dummy data (Tidak disarankan di-expose di Production).
+## 7. Utility
+- `GET /health`: Cek konektivitas database.
+- `GET /seed`: (Dev) Trigger seed database (jika script tidak disabled).

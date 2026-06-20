@@ -1,43 +1,22 @@
-# Dokumentasi Deployment
+# Deployment Guide
 
-## Struktur Aplikasi
-Aplikasi ini di-deploy di platform Netlify dengan dua bagian utama:
-1. **Frontend:** React + Vite (sebagai static assets).
-2. **Backend:** Express API berjalan secara serverless via Netlify Functions.
+Aplikasi Absensi Apel menggunakan arsitektur Monorepo yang kompatibel dengan **Netlify**.
 
-## Environment Variables Wajib
-Di setting dashboard (Netlify/Vercel) atur variable berikut:
-- `DATABASE_URL`: URI ke database Supabase (Pooler/Transaction).
-- `DIRECT_URL`: URI direct Supabase (untuk migrasi Prisma).
-- `JWT_SECRET`: Secret token untuk enkripsi session backend.
-- (Opsional) `NODE_ENV`: Diset otomatis ke `production`.
+## Struktur Eksekusi
+- **Frontend**: React (Vite)
+- **Backend**: Express via `serverless-http` yang dijalankan sebagai Netlify Functions (`netlify/functions/api.js`).
 
-## Perintah Build & Deploy
-Pada file `netlify.toml`, perintah build telah diatur secara root:
+## Command Build Local
+- Frontend: `npm run dev:frontend` (di root)
+- Backend: `npm run dev:backend` (di root)
 
-```toml
-[build]
-  command = "npm run build:frontend"
-  publish = "frontend/dist"
-```
-*(Catatan: Saat ini, install root dan struktur mungkin membutuhkan penyesuaian jika build failed di cloud).*
+## Variabel Environment (Wajib diisi di Server/Netlify)
+Pastikan hal berikut dikonfigurasi pada dashboard host Anda (contoh Netlify Env):
+- `DATABASE_URL` = Koneksi PostgreSQL via Prisma
+- `DIRECT_URL` = (Opsional, untuk migrasi)
+- `JWT_SECRET` = String rahasia acak
+- `FRONTEND_URL` = URL dari aplikasi React Anda (contoh: `https://absensi-apel.netlify.app`)
 
-### Local Development
-Gunakan root package.json helper atau masuki folder masing-masing:
-
-**Backend:**
-```bash
-cd backend
-npm run dev # atau npm start
-```
-
-**Frontend:**
-```bash
-cd frontend
-npm run dev
-```
-
-Pastikan VITE_API_URL di `frontend/.env.local` menunjuk ke URL lokal server backend (cth: `http://localhost:5000`).
-
-## Serverless Function
-Endpoint API dialihkan dari `/api/*` menuju ke direktori `netlify/functions/api.js`. Fungsi tersebut memanfaatkan `serverless-http` yang membungkus express app di `backend/index.js` (atau `backend/src/app.js` setelah refactor).
+## Alur Netlify
+Berdasarkan `netlify.toml`, aplikasi akan membuild root `package.json` yang akan memicu command Vite build untuk frontend.
+Lalu Netlify Functions akan menangkap semua route `/api/*` dan meneruskannya ke file `netlify/functions/api.js` (yang memanggil `backend/index.js` -> `backend/src/app.js`).

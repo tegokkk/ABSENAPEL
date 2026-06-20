@@ -44,18 +44,23 @@ export function useDebounceCallback(callback, delay = 400) {
 // ============================================================
 export function useButtonGuard(delay = 1000) {
   const [isLocked, setIsLocked] = useState(false);
+  const lockRef = useRef(false);
 
   const trigger = useCallback(
     (fn) => async (...args) => {
-      if (isLocked) return;
+      if (lockRef.current) return;
+      lockRef.current = true;
       setIsLocked(true);
       try {
         await fn(...args);
       } finally {
-        setTimeout(() => setIsLocked(false), delay);
+        setTimeout(() => {
+          lockRef.current = false;
+          setIsLocked(false);
+        }, delay);
       }
     },
-    [isLocked, delay]
+    [delay]
   );
 
   return [isLocked, trigger];

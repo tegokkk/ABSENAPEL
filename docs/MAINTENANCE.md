@@ -1,30 +1,20 @@
-# Dokumentasi Maintenance
+# SOP Maintenance & Skrip Admin
 
-Dokumen ini berisi panduan untuk admin sistem / developer dalam melakukan maintenance harian maupun insidental.
+File-file khusus untuk pemeliharaan sistem terletak di dalam `backend/scripts/`.
 
-## Script Helper Admin
-Di dalam folder `backend/scripts/` tersedia beberapa utilitas CLI:
+## 1. check-admin.js
+Skrip ini digunakan untuk mengecek apakah akun admin default ada di dalam sistem.
+- **Cara Pakai**: `npm run check:admin` (di dalam folder backend).
 
-1. **`check-admin.js`**
-   - **Fungsi:** Melihat ketersediaan admin di database, menguji hash bcrypt, dan melihat NPM pengguna (debug).
-   - **Cara pakai:** `npm run check:admin` dari folder `backend`.
+## 2. reset-admin.js
+Skrip ini *force-reset* atau meregenerasi akun Admin default jika Anda terkunci dari sistem (lupa password).
+- **Cara Pakai**: `npm run reset:admin`
+- **Peringatan**: Pastikan hanya digunakan saat *emergency*. 
 
-2. **`reset-admin.js`**
-   - **Fungsi:** Me-reset (update/upsert) password admin (`TIMDIS1` dan `TIMDIS2`) jika terjadi lupa sandi atau hash rusak.
-   - **Cara pakai:** `npm run reset:admin` dari folder `backend`.
+## 3. seed.js
+Skrip untuk memasukkan (seeding) data awal seperti admin, jurusan, dan lokasi default.
+- **Cara Pakai**: `npm run seed`
 
-3. **`seed.js`**
-   - **Fungsi:** Mengosongkan data dan memuat data master awal secara dummy (Kelas, Jadwal, Mahasiswa, dan Admin).
-   - **Risiko:** *High Risk!* Eksekusi ini akan **MENGHAPUS** semua absensi dan perizinan. 
-   - **Cara pakai:** `npm run seed` dari folder `backend`.
-
-## Tindakan Pencegahan (Security)
-- Jangan pernah mem-commit file `.env` atau `.env.local` ke repository.
-- Pastikan limit upload gambar di backend tidak diubah menjadi nilai yang sangat besar (default 10mb) untuk mencegah serangan DDOS Payload base64.
-- Fungsi seeding `/api/seed` yang dapat diakses via browser hanya boleh dibiarkan aktif pada lingkungan pengembangan, segera beri blok jika sudah live.
-
-## Pembersihan Berkas Lokal
-Folder `backend/uploads/` digunakan secara default untuk menyimpan foto selfie di lokal jika tidak diarahkan ke bucket storage khusus.
-Secara berkala, lakukan pembersihan terhadap file lama untuk menghemat kapasitas storage:
-- *Di Linux/Mac:* `find backend/uploads/ -type f -mtime +30 -name '*.jpg' -delete`
-- Atau lakukan penghapusan manual pada file lawas.
+## Aturan Keamanan Database & Skrip
+1. Jangan pernah memasukkan file `.env` ke dalam Git Repository (`.gitignore` sudah mengcover ini).
+2. Hindari memanggil `/api/seed` melalui web API di mode production; gunakan `npm run seed` di terminal server jika diperlukan.

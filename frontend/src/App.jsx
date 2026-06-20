@@ -3,6 +3,7 @@ import Login from './pages/Login';
 import UserDashboard from './pages/UserDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import { useEffect, useState } from 'react';
+import { LogOut, UsersRound } from 'lucide-react';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -32,43 +33,59 @@ function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+      <div className="app-shell">
+
+        {/* Navbar */}
         {user && (
-          <nav className="bg-white shadow-sm border-b border-slate-200 px-6 py-3 flex justify-between items-center sticky top-0 z-50">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center shadow-sm">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                  <circle cx="9" cy="7" r="4"/>
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                </svg>
+          <nav className="sticky top-0 z-40 border-b border-[var(--border)] bg-[rgba(22,27,34,.92)] backdrop-blur-xl">
+            <div className="mx-auto flex min-h-16 w-full max-w-7xl items-center justify-between gap-3 px-3 py-2 sm:px-5 lg:px-6">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-accent-500/25 bg-accent-500/10 text-accent-400">
+                  <UsersRound size={18} strokeWidth={1.9} />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold leading-tight text-primary">
+                    Smart Attendance
+                  </p>
+                  <p className="truncate text-[11px] leading-tight text-muted">
+                    Sistem Absensi Digital
+                  </p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-base font-bold bg-gradient-to-r from-sky-500 to-blue-600 bg-clip-text text-transparent leading-tight">
-                  Smart Attendance
-                </h1>
-                <p className="text-xs text-slate-400 leading-tight">Sistem Absensi Digital</p>
+
+              <div className="flex min-w-0 items-center justify-end gap-2 sm:gap-3">
+                <div className="hidden min-w-0 text-right sm:block">
+                  <p className="max-w-[180px] truncate text-sm font-semibold leading-tight text-primary md:max-w-[260px]">
+                    {user.name}
+                  </p>
+                  <p className="truncate text-[11px] leading-tight text-muted">
+                    {user.role === 'ADMIN' ? 'Administrator' : user.kelas || 'Mahasiswa'}
+                  </p>
+                </div>
+                <span
+                  className={`hidden rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-normal sm:inline-flex ${
+                    user.role === 'ADMIN'
+                      ? 'border border-info-500/20 bg-info-500/10 text-info-500'
+                      : 'border border-accent-500/20 bg-accent-500/10 text-accent-400'
+                  }`}
+                >
+                  {user.role === 'ADMIN' ? 'Admin' : 'Mahasiswa'}
+                </span>
+                <button
+                  onClick={handleLogout}
+                  id="btn-logout"
+                  className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-danger-500/20 bg-danger-500/10 px-3 text-xs font-semibold text-danger-500 transition hover:bg-danger-500/15 active:scale-[.98]"
+                >
+                  <LogOut size={14} />
+                  <span className="hidden sm:inline">Logout</span>
+                </button>
               </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-semibold text-slate-700">{user.name}</p>
-                <p className="text-xs text-slate-400">
-                  {user.role === 'ADMIN' ? 'Administrator' : `${user.kelas || 'Mahasiswa'}`}
-                </p>
-              </div>
-              <button
-                onClick={handleLogout}
-                id="btn-logout"
-                className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-xl hover:bg-red-100 transition-all border border-red-100"
-              >
-                Logout
-              </button>
             </div>
           </nav>
         )}
-        <main className={user ? 'max-w-7xl mx-auto p-4 md:p-6' : ''}>
+
+        {/* Content */}
+        <main className={user ? 'app-main' : ''}>
           <Routes>
             <Route
               path="/"

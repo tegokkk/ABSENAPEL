@@ -1,39 +1,38 @@
-# Dokumentasi Database
+# Dokumentasi Database & Schema
 
-## Ringkasan
-- **Provider:** PostgreSQL (melalui Supabase).
-- **ORM:** Prisma.
-- **Environment Variables:** `DATABASE_URL` (untuk koneksi pooler) dan `DIRECT_URL` (untuk koneksi direct/migrasi).
-- **Lokasi Schema:** `backend/prisma/schema.prisma`
+## Spesifikasi
+- **Provider**: PostgreSQL
+- **ORM**: Prisma
+- **Environment Variables**:
+  - `DATABASE_URL`: Connection pooler (contoh: Supabase Transaction mode)
+  - `DIRECT_URL`: Direct connection (untuk Prisma migrations)
+
+## Lokasi Schema
+Semua definisi schema berada di `backend/prisma/schema.prisma`.
 
 ## Model Utama
-- **User:** Mengelola data Mahasiswa dan Admin. Memiliki kolom `role`, `npm`, `kelas`, dan berelasi dengan `Kelas` via `kelasId`.
-- **Attendance:** Data riwayat absensi apel harian.
-- **LokasiAbsen:** Konfigurasi lokasi utama apel (latitude, longitude, radius).
-- **Settings:** Konfigurasi dinamis aplikasi (contoh: `BATAS_TERLAMBAT`).
-- **Jurusan & ProgramStudi:** Master data akademik hierarkis.
-- **Kelas:** Entitas kelas tempat pengguna ditugaskan.
-- **JadwalApel:** Manajemen jadwal spesifik dengan batas waktu.
-- **PengajuanIzin:** Sistem izin bagi mahasiswa yang tidak dapat menghadiri apel.
-- **ActivityLog:** Log untuk audit aksi admin.
+1. **User**
+   - Mengelola data autentikasi (username, password, role).
+   - Memiliki relasi ke `Kelas` untuk role `MAHASISWA`.
+2. **Attendance**
+   - Mencatat log absensi per user.
+   - Menyimpan koordinat GPS, jarak dari lokasi (radius), status keterlambatan, dan foto selfie.
+   - Relasi opsional ke `JadwalApel`.
+3. **Master Data Akademik**
+   - **Jurusan**: Entitas tertinggi.
+   - **ProgramStudi**: Berelasi ke Jurusan.
+   - **Kelas**: Berelasi ke ProgramStudi, referensi utama untuk pengelompokan mahasiswa.
+4. **JadwalApel**
+   - Jadwal pelaksanaan apel beserta waktu mulai dan selesai.
+5. **PengajuanIzin**
+   - Menyimpan pengajuan izin mahasiswa beserta lampiran dan status persetujuan.
+6. **ActivityLog**
+   - Mencatat aktivitas sistem untuk audit (khususnya untuk admin).
+7. **Lokasi**
+   - Menyimpan titik kordinat kampus/apel beserta radius toleransi.
 
-## Manajemen Migrasi
-Setiap perubahan pada file `schema.prisma` perlu diikuti dengan migrasi:
-
-```bash
-cd backend
-npx prisma migrate dev --name deskripsi_migrasi
-```
-
-Jika tidak ingin menyimpan file migrasi secara lokal dan mem-push secara langsung (misal di environment production/live):
-```bash
-npx prisma db push
-```
-
-## Data Seeding
-Seeding awal (untuk reset & dummy data):
-```bash
-cd backend
-npm run seed
-```
-**Perhatian:** Menjalankan script ini akan menghapus data absensi, data izin, dan user mahasiswa/admin sebelumnya lalu membuat dummy data untuk pengujian. Disarankan hanya di environment development.
+## Operasi Prisma
+- **Generate Client**: `npx prisma generate` (harus dijalankan setelah `npm install`).
+- **Migrasi Baru**: `npx prisma migrate dev --name <nama_migrasi>`
+- **Push Schema (Tanpa Migrasi)**: `npx prisma db push`
+- **Seeding Data**: `npm run seed` (mengeksekusi `backend/scripts/seed.js`)

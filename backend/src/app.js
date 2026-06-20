@@ -35,6 +35,8 @@ app.use(require('./routes/izin.routes'));
 app.use(require('./routes/attendance.routes'));
 app.use(require('./routes/seed.routes'));
 
+const { errorHandler } = require('./middlewares/error');
+
 app.get("/", (req, res) => {
   res.send("Smart Attendance API Running");
 });
@@ -50,5 +52,13 @@ app.get("/api/health", async (req, res) => {
     res.status(500).json({ status: "error", database: "disconnected", message: error.message });
   }
 });
+
+// 404 Route Not Found handler
+app.use((req, res, next) => {
+  res.status(404).json({ error: "Endpoint tidak ditemukan" });
+});
+
+// Global Error Handler
+app.use(errorHandler);
 
 module.exports = app;
