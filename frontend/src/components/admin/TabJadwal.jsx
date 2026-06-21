@@ -8,6 +8,30 @@ import Table, { EmptyRow } from '../ui/Table';
 import { jadwalApi } from '../../services/jadwalApi';
 import { useButtonGuard } from '../../hooks/useDebounce';
 
+/**
+ * Konversi nilai dari input datetime-local ("YYYY-MM-DDTHH:mm") ke ISO 8601
+ * dengan offset timezone WIB (UTC+7), agar backend menyimpan waktu yang benar.
+ * Tanpa ini, new Date("YYYY-MM-DDTHH:mm") di Node.js dianggap UTC → maju 7 jam.
+ */
+function localToISO(datetimeLocalValue) {
+  if (!datetimeLocalValue) return datetimeLocalValue;
+  // Tambahkan offset +07:00 secara eksplisit
+  return datetimeLocalValue + ':00+07:00';
+}
+
+/**
+ * Format timestamp dari DB (UTC/ISO) ke waktu lokal WIB yang mudah dibaca.
+ */
+function formatWIB(isoString) {
+  if (!isoString) return '-';
+  return new Date(isoString).toLocaleString('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric', month: 'numeric', day: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  });
+}
+
 export default function TabJadwal() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -29,7 +53,13 @@ export default function TabJadwal() {
   const handleAdd = guardAction(async () => {
     try {
       setLoading(true);
-      await jadwalApi.createJadwal(form);
+      // Konversi ke ISO+07:00 agar backend tidak salah interpretasi timezone
+      const payload = {
+        ...form,
+        waktu_mulai:   localToISO(form.waktu_mulai),
+        waktu_selesai: localToISO(form.waktu_selesai),
+      };
+      await jadwalApi.createJadwal(payload);
       setForm({ nama_kegiatan: '', waktu_mulai: '', waktu_selesai: '', deskripsi: '', is_active: true });
       fetchData();
     } catch { alert('Gagal menambah jadwal'); } finally { setLoading(false); }
@@ -112,10 +142,10 @@ export default function TabJadwal() {
                   )}
                 </td>
                 <td className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
-                  {new Date(j.waktu_mulai).toLocaleString('id-ID')}
+                  {formatWIB(j.waktu_mulai)}
                 </td>
                 <td className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
-                  {new Date(j.waktu_selesai).toLocaleString('id-ID')}
+                  {formatWIB(j.waktu_selesai)}
                 </td>
                 <td className="text-center">
                   <Button

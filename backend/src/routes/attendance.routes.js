@@ -217,8 +217,11 @@ router.get(
   adminOnly,
   async (req, res) => {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      // Gunakan tengah malam WIB (UTC+7) sebagai awal hari — bukan UTC midnight
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      // Offset WIB: kurangi 7 jam untuk mendapat batas UTC yang sesuai
+      today.setTime(today.getTime() - (7 * 60 * 60 * 1000));
 
       const todayAttendances = await prisma.attendance.findMany({
         where: { tanggal: { gte: today } },
