@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../utils/prisma');
 const { authMiddleware, adminOnly } = require('../middlewares/auth');
-const { getSettings, getDistance, getClientIP, checkIsLate } = require('../utils/helpers');
+const { getDistance, getClientIP } = require('../utils/helpers');
 
 // =============================================
 // ATTENDANCE — ABSEN APEL (dengan Anti-Fake GPS)
@@ -79,8 +79,7 @@ router.post(
       }
 
       const fotoPath = req.body.foto_selfie; // Base64 string from frontend
-      const settings = await getSettings();
-      const isLate = checkIsLate(settings.BATAS_TERLAMBAT);
+      const isLate = nowTime > activeJadwal.waktu_mulai;
       const clientIP = getClientIP(req);
 
       const activeLocation = await prisma.lokasiAbsen.findFirst({

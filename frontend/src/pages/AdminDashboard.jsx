@@ -7,7 +7,6 @@ import {
 import { attendanceApi } from '../services/attendanceApi';
 import { usersApi } from '../services/usersApi';
 import { lokasiApi } from '../services/lokasiApi';
-import { settingsApi } from '../services/settingsApi';
 import ExcelJS from 'exceljs';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -652,10 +651,10 @@ function TabUsers() {
 // TAB PENGATURAN — Lokasi Titik Apel + Pengaturan Waktu
 // ============================================================
 function TabSettings() {
+  const [activeSubTab, setActiveSubTab] = useState('umum'); // 'umum' atau 'jadwal'
+
   const [locations, setLocations] = useState([]);
   const [activeLocationId, setActiveLocationId] = useState(null);
-  const [batasTerlambat, setBatasTerlambat] = useState('08:00');
-  const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
 
@@ -670,35 +669,16 @@ function TabSettings() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [settingsRes, lokasiRes] = await Promise.all([
-        settingsApi.getSettings(),
-        lokasiApi.getLokasi(),
-      ]);
-      setBatasTerlambat(settingsRes.BATAS_TERLAMBAT || '08:00');
+      const lokasiRes = await lokasiApi.getLokasi();
       setLocations(lokasiRes);
       const activeLoc = lokasiRes.find(l => l.is_active);
       if (activeLoc) setActiveLocationId(activeLoc.id);
     } catch (error) {
-      console.error("Gagal mengambil data pengaturan atau lokasi:", error);
+      console.error("Gagal mengambil data lokasi:", error);
     }
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-
-  const handleReloadSettings = guardAction(fetchData);
-
-  const handleSaveSettings = guardSave(async () => {
-    setLoading(true); setMsg(''); setError('');
-    try {
-      const data = await settingsApi.updateSettings({ BATAS_TERLAMBAT: batasTerlambat });
-      setMsg(data.message);
-      setTimeout(() => setMsg(''), 4000);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Gagal menyimpan pengaturan');
-    } finally {
-      setLoading(false);
-    }
-  });
 
   const handleActivate = guardAction(async (id) => {
     try {
@@ -773,9 +753,22 @@ function TabSettings() {
   });
 
   return (
-    <div className="max-w-3xl space-y-6">
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-4">
+    <div className="space-y-6">
+      <div className="-mx-3 overflow-x-auto px-3 pb-2 hide-scrollbar sm:mx-0 sm:px-0">
+        <nav className="flex min-w-max gap-2">
+          <button onClick={() => setActiveSubTab('umum')} className={`tab-pill ${activeSubTab === 'umum' ? 'active' : ''}`}>
+             <Settings2 size={16} /> Umum
+          </button>
+          <button onClick={() => setActiveSubTab('jadwal')} className={`tab-pill ${activeSubTab === 'jadwal' ? 'active' : ''}`}>
+             <Clock size={16} /> Jadwal Apel
+          </button>
+        </nav>
+      </div>
+
+      {activeSubTab === 'umum' ? (
+        <div className="max-w-3xl space-y-6">
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>Lokasi Titik Apel Aktif</h3>
             <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Pilih lokasi yang digunakan saat mahasiswa melakukan absen apel.</p>
@@ -896,33 +889,8 @@ function TabSettings() {
         </div>
       </Modal>
 
-      <Card className="p-6">
-        <div>
-          <h3 className="font-bold text-base mb-1" style={{ color: 'var(--text-primary)' }}>Batas Jam Tepat Waktu</h3>
-          <p className="text-sm mb-4" style={{ color: 'var(--text-muted)' }}>Mahasiswa yang absen setelah jam ini akan dicatat sebagai TERLAMBAT.</p>
-          <div className="flex items-center gap-3">
-            <input type="time" value={batasTerlambat} onChange={e => setBatasTerlambat(e.target.value)}
-              className="w-40 px-4 py-2.5 rounded-xl text-sm transition-all outline-none"
-              style={{ background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
-              onFocus={e => e.currentTarget.style.borderColor = 'var(--border-focus)'}
-              onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
-            />
-            <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>WIB</span>
-          </div>
-        </div>
-      </Card>
-
       {msg && <div className="p-3 rounded-xl text-sm font-medium" style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#34d399' }}>{msg}</div>}
       {error && <div className="p-3 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>{error}</div>}
-
-      <div className="flex gap-3">
-        <Button variant="secondary" size="md" onClick={handleReloadSettings}>
-          Muat Ulang
-        </Button>
-        <Button id="btn-save-settings" variant="primary" size="md" onClick={handleSaveSettings} loading={loading}>
-          Simpan Pengaturan
-        </Button>
-      </div>
 
       <div className="p-4 rounded-2xl" style={{ background: 'rgba(56,189,248,0.05)', border: '1px solid rgba(56,189,248,0.15)' }}>
         <p className="text-sm font-medium" style={{ color: '#38bdf8' }}>Catatan Penting</p>
@@ -931,6 +899,10 @@ function TabSettings() {
           Gunakan Google Maps untuk mendapatkan koordinat yang tepat. Lokasi default tidak dapat dihapus.
         </p>
       </div>
+        </div>
+      ) : (
+        <TabJadwal />
+      )}
     </div>
   );
 }
@@ -958,7 +930,6 @@ export default function AdminDashboard() {
   const tabs = [
     { id: 'absensi', label: 'Data Absensi', icon: <Calendar size={16} /> },
     { id: 'izin', label: 'Validasi Izin', icon: <FileText size={16} /> },
-    { id: 'jadwal', label: 'Jadwal Apel', icon: <Clock size={16} /> },
     { id: 'master', label: 'Data Akademik', icon: <Layers size={16} /> },
     { id: 'users', label: 'Mahasiswa', icon: <Users size={16} /> },
     { id: 'settings', label: 'Pengaturan', icon: <Settings2 size={16} /> },
@@ -1013,7 +984,6 @@ export default function AdminDashboard() {
       <div>
         {activeTab === 'absensi' && <TabAbsensi />}
         {activeTab === 'izin' && <TabIzin />}
-        {activeTab === 'jadwal' && <TabJadwal />}
         {activeTab === 'master' && <TabMasterData />}
         {activeTab === 'users' && <TabUsers />}
         {activeTab === 'settings' && <TabSettings />}
