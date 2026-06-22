@@ -79,7 +79,7 @@ router.post(
       }
 
       const fotoPath = req.body.foto_selfie; // Base64 string from frontend
-      const isLate = nowTime > activeJadwal.waktu_mulai;
+      const isLate = nowTime > (activeJadwal.batas_terlambat || activeJadwal.waktu_mulai);
       const clientIP = getClientIP(req);
 
       const activeLocation = await prisma.lokasiAbsen.findFirst({

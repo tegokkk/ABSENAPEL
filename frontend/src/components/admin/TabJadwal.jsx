@@ -38,6 +38,7 @@ export default function TabJadwal() {
   const [form, setForm] = useState({
     nama_kegiatan: '',
     waktu_mulai: '',
+    batas_terlambat: '',
     waktu_selesai: '',
     deskripsi: '',
     is_active: true,
@@ -57,10 +58,11 @@ export default function TabJadwal() {
       const payload = {
         ...form,
         waktu_mulai:   localToISO(form.waktu_mulai),
+        batas_terlambat: localToISO(form.batas_terlambat) || null,
         waktu_selesai: localToISO(form.waktu_selesai),
       };
       await jadwalApi.createJadwal(payload);
-      setForm({ nama_kegiatan: '', waktu_mulai: '', waktu_selesai: '', deskripsi: '', is_active: true });
+      setForm({ nama_kegiatan: '', waktu_mulai: '', batas_terlambat: '', waktu_selesai: '', deskripsi: '', is_active: true });
       fetchData();
     } catch { alert('Gagal menambah jadwal'); } finally { setLoading(false); }
   });
@@ -95,13 +97,20 @@ export default function TabJadwal() {
             placeholder="Opsional"
           />
           <Input
-            label="Waktu Mulai"
+            label="Waktu Mulai (Buka Absen)"
             type="datetime-local"
             value={form.waktu_mulai}
             onChange={(e) => setForm({ ...form, waktu_mulai: e.target.value })}
           />
           <Input
-            label="Waktu Selesai"
+            label="Batas Terlambat (Opsional)"
+            type="datetime-local"
+            value={form.batas_terlambat}
+            onChange={(e) => setForm({ ...form, batas_terlambat: e.target.value })}
+            helperText="Jika kosong, waktu mulai = batas terlambat"
+          />
+          <Input
+            label="Waktu Selesai (Tutup Absen)"
             type="datetime-local"
             value={form.waktu_selesai}
             onChange={(e) => setForm({ ...form, waktu_selesai: e.target.value })}
@@ -119,6 +128,7 @@ export default function TabJadwal() {
           headers={[
             { label: 'Kegiatan' },
             { label: 'Waktu Mulai' },
+            { label: 'Batas Terlambat' },
             { label: 'Waktu Selesai' },
             { label: 'Status Aktif', align: 'center' },
             { label: 'Aksi', align: 'right' },
@@ -144,6 +154,9 @@ export default function TabJadwal() {
                 <td className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
                   {formatWIB(j.waktu_mulai)}
                 </td>
+                <td className="font-mono text-xs text-amber-500/90 font-semibold">
+                  {j.batas_terlambat ? formatWIB(j.batas_terlambat) : '-'}
+                </td>
                 <td className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
                   {formatWIB(j.waktu_selesai)}
                 </td>
@@ -165,7 +178,7 @@ export default function TabJadwal() {
               </tr>
             );
           })}
-          {data.length === 0 && <EmptyRow colSpan={5} />}
+          {data.length === 0 && <EmptyRow colSpan={6} />}
         </Table>
       </Card>
     </div>

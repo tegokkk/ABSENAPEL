@@ -102,10 +102,11 @@ model Kelas {
 
 model JadwalApel {
   id            Int          @id @default(autoincrement())
-  nama_kegiatan String
-  waktu_mulai   DateTime
-  waktu_selesai DateTime
-  deskripsi     String?
+  nama_kegiatan   String
+  waktu_mulai     DateTime
+  batas_terlambat DateTime?
+  waktu_selesai   DateTime
+  deskripsi       String?
   is_active     Boolean      @default(true)
   attendances   Attendance[]
   created_at    DateTime     @default(now())
