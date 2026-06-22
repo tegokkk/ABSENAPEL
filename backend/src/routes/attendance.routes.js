@@ -2,16 +2,22 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../utils/prisma');
 const { authMiddleware, adminOnly } = require('../middlewares/auth');
-const { getSettings, getDistance, getClientIP } = require('../utils/helpers');
+const { getSettings, getDistance, getClientIP, checkIsLate } = require('../utils/helpers');
 
 // =============================================
 // ATTENDANCE — ABSEN APEL (dengan Anti-Fake GPS)
 // =============================================
 
+const activeRequests = new Set();
+
 router.post(
   "/api/attendance/apel",
   authMiddleware,
   async (req, res) => {
+    if (activeRequests.has(req.user.id)) {
+      return res.status(429).json({ success: false, message: "Permintaan Anda sedang diproses, harap tunggu." });
+    }
+    activeRequests.add(req.user.id);
     try {
       const {
         latitude,
@@ -73,7 +79,8 @@ router.post(
       }
 
       const fotoPath = req.body.foto_selfie; // Base64 string from frontend
-      const isLate = nowTime > activeJadwal.waktu_mulai;
+      const settings = await getSettings();
+      const isLate = checkIsLate(settings.BATAS_TERLAMBAT);
       const clientIP = getClientIP(req);
 
       const activeLocation = await prisma.lokasiAbsen.findFirst({
@@ -149,6 +156,8 @@ router.post(
     } catch (error) {
       console.error("[ATTENDANCE ERROR]", error);
       res.status(500).json({ error: "Server error" });
+    } finally {
+      activeRequests.delete(req.user.id);
     }
   },
 );

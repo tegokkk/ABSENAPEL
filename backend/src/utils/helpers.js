@@ -46,9 +46,24 @@ async function getSettings() {
 
 function checkIsLate(batasTerlambat) {
   const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Jakarta',
+    hour12: false,
+    hour: 'numeric',
+    minute: 'numeric'
+  });
+  
+  const parts = formatter.formatToParts(now);
+  let currentHour, currentMinute;
+  for (const part of parts) {
+    if (part.type === 'hour') currentHour = parseInt(part.value, 10);
+    if (part.type === 'minute') currentMinute = parseInt(part.value, 10);
+  }
+  if (currentHour === 24) currentHour = 0;
+  
   const [batasHour, batasMenit] = batasTerlambat.split(":").map(Number);
-  if (now.getHours() > batasHour) return true;
-  if (now.getHours() === batasHour && now.getMinutes() >= batasMenit)
+  if (currentHour > batasHour) return true;
+  if (currentHour === batasHour && currentMinute >= batasMenit)
     return true;
   return false;
 }
