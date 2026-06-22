@@ -400,14 +400,7 @@ export default function UserDashboard({ user }) {
             </Button>
           )}
 
-          {!todayRecord && (
-            <p className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>
-              Batas tepat waktu:{' '}
-              <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                {settings.BATAS_TERLAMBAT} WIB
-              </span>
-            </p>
-          )}
+
 
           {location && (
             <div
