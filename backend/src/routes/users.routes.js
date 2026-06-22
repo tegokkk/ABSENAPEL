@@ -3,8 +3,6 @@ const router = express.Router();
 const prisma = require('../utils/prisma');
 const { authMiddleware, adminOnly } = require('../middlewares/auth');
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const SECRET_KEY = process.env.JWT_SECRET || "smartattendance_timdis_2024";
 
 // =============================================
 // USERS — CRUD (Admin Only)
@@ -98,10 +96,15 @@ router.put("/api/users/:id", authMiddleware, adminOnly, async (req, res) => {
 router.delete("/api/users/:id", authMiddleware, adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
-    await prisma.attendance.deleteMany({ where: { userId: parseInt(id) } });
-    await prisma.user.delete({ where: { id: parseInt(id) } });
+    const userId = parseInt(id);
+    await prisma.$transaction([
+      prisma.attendance.deleteMany({ where: { userId } }),
+      prisma.pengajuanIzin.deleteMany({ where: { userId } }),
+      prisma.activityLog.updateMany({ where: { userId }, data: { userId: null } }),
+      prisma.user.delete({ where: { id: userId } }),
+    ]);
     res.json({
-      message: "Mahasiswa berhasil dihapus beserta seluruh data absensinya",
+      message: "Mahasiswa berhasil dihapus beserta data terkaitnya",
     });
   } catch (error) {
     console.error("[DELETE USER ERROR]", error);

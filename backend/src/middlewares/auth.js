@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const SECRET_KEY = process.env.JWT_SECRET || "smartattendance_timdis_2024";
+const { getJwtSecret } = require("../utils/config");
 
 // =============================================
 // MIDDLEWARE
@@ -12,7 +12,7 @@ const authMiddleware = (req, res, next) => {
       .status(401)
       .json({ error: "Unauthorized. Silakan login terlebih dahulu." });
   try {
-    req.user = jwt.verify(token, SECRET_KEY);
+    req.user = jwt.verify(token, getJwtSecret());
     next();
   } catch (err) {
     res

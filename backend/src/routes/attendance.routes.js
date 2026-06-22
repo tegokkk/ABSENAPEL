@@ -48,16 +48,22 @@ router.post(
 
       // Cek jadwal aktif
       const nowTime = new Date();
-      const activeJadwal = await prisma.jadwalApel.findFirst({
+      const activeSchedules = await prisma.jadwalApel.findMany({
         where: {
           is_active: true,
           waktu_mulai: { lte: nowTime },
           waktu_selesai: { gte: nowTime }
-        }
+        },
+        orderBy: { waktu_mulai: "asc" },
+        take: 2,
       });
+      const activeJadwal = activeSchedules[0];
 
       if (!activeJadwal) {
         return res.status(400).json({ success: false, message: "Belum ada jadwal apel yang aktif saat ini." });
+      }
+      if (activeSchedules.length > 1) {
+        return res.status(409).json({ success: false, message: "Ada lebih dari satu jadwal apel aktif saat ini. Hubungi admin." });
       }
 
       // Cek sudah absen hari ini untuk jadwal ini
@@ -154,6 +160,11 @@ router.post(
       });
     } catch (error) {
       console.error("[ATTENDANCE ERROR]", error);
+      if (error.code === "P2002") {
+        return res
+          .status(400)
+          .json({ success: false, message: "Anda sudah melakukan absen untuk jadwal apel ini." });
+      }
       res.status(500).json({ error: "Server error" });
     } finally {
       activeRequests.delete(req.user.id);

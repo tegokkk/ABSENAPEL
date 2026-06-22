@@ -664,7 +664,6 @@ function TabSettings() {
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState('');
 
-  const [, guardSave] = useButtonGuard(1500);
   const [, guardAction] = useButtonGuard(1000);
 
   const fetchData = useCallback(async () => {

@@ -4,7 +4,7 @@ const prisma = require('../utils/prisma');
 const { authMiddleware, adminOnly } = require('../middlewares/auth');
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const SECRET_KEY = process.env.JWT_SECRET || "smartattendance_timdis_2024";
+const { getJwtSecret } = require("../utils/config");
 
 // =============================================
 // AUTH
@@ -37,7 +37,7 @@ router.post("/api/login", async (req, res) => {
         kelas: user.kelas,
         npm: user.npm,
       },
-      SECRET_KEY,
+      getJwtSecret(),
       { expiresIn: "1d" },
     );
 

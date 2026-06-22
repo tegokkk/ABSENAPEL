@@ -31,24 +31,34 @@ router.post("/api/lokasi", authMiddleware, adminOnly, async (req, res) => {
         .json({ error: "Nama lokasi, latitude, dan longitude wajib diisi" });
     }
 
-    const location = await prisma.lokasiAbsen.create({
-      data: {
-        nama_lokasi: nama_lokasi.trim(),
-        latitude: parseFloat(latitude),
-        longitude: parseFloat(longitude),
-        radius_meter: radius_meter ? parseFloat(radius_meter) : 100,
-      },
-    });
+    const lat = parseFloat(latitude);
+    const lon = parseFloat(longitude);
+    const radius = radius_meter ? parseFloat(radius_meter) : 100;
 
-    // Jika ini lokasi pertama, jadikan aktif
-    const count = await prisma.lokasiAbsen.count();
-    if (count === 1) {
-      await prisma.lokasiAbsen.update({
-        where: { id: location.id },
-        data: { is_active: true },
-      });
-      location.is_active = true;
+    if (isNaN(lat) || isNaN(lon) || isNaN(radius) || radius <= 0) {
+      return res.status(400).json({ error: "Koordinat atau radius lokasi tidak valid" });
     }
+
+    const location = await prisma.$transaction(async (tx) => {
+      const created = await tx.lokasiAbsen.create({
+        data: {
+          nama_lokasi: nama_lokasi.trim(),
+          latitude: lat,
+          longitude: lon,
+          radius_meter: radius,
+        },
+      });
+
+      const count = await tx.lokasiAbsen.count();
+      if (count === 1) {
+        return tx.lokasiAbsen.update({
+          where: { id: created.id },
+          data: { is_active: true },
+        });
+      }
+
+      return created;
+    });
 
     res.status(201).json({
       message: "Lokasi berhasil ditambahkan",
@@ -79,6 +89,14 @@ router.put("/api/lokasi/:id", authMiddleware, adminOnly, async (req, res) => {
     if (longitude !== undefined) updateData.longitude = parseFloat(longitude);
     if (radius_meter !== undefined) updateData.radius_meter = parseFloat(radius_meter);
 
+    if (
+      (updateData.latitude !== undefined && isNaN(updateData.latitude)) ||
+      (updateData.longitude !== undefined && isNaN(updateData.longitude)) ||
+      (updateData.radius_meter !== undefined && (isNaN(updateData.radius_meter) || updateData.radius_meter <= 0))
+    ) {
+      return res.status(400).json({ error: "Koordinat atau radius lokasi tidak valid" });
+    }
+
     const location = await prisma.lokasiAbsen.update({
       where: { id: parseInt(id) },
       data: updateData,
@@ -108,28 +126,21 @@ router.delete("/api/lokasi/:id", authMiddleware, adminOnly, async (req, res) => 
         .json({ error: "Lokasi default tidak dapat dihapus" });
     }
 
-    await prisma.lokasiAbsen.delete({ where: { id: parseInt(id) } });
+    await prisma.$transaction(async (tx) => {
+      await tx.lokasiAbsen.delete({ where: { id: parseInt(id) } });
 
-    // Jika yang dihapus adalah lokasi aktif, aktifkan lokasi default atau lokasi pertama
-    if (existing.is_active) {
-      const defaultLoc = await prisma.lokasiAbsen.findFirst({
-        where: { is_default: true },
-      });
-      if (defaultLoc) {
-        await prisma.lokasiAbsen.update({
-          where: { id: defaultLoc.id },
-          data: { is_active: true },
+      if (existing.is_active) {
+        const replacement = await tx.lokasiAbsen.findFirst({
+          orderBy: [{ is_default: "desc" }, { id: "asc" }],
         });
-      } else {
-        const firstLoc = await prisma.lokasiAbsen.findFirst();
-        if (firstLoc) {
-          await prisma.lokasiAbsen.update({
-            where: { id: firstLoc.id },
+        if (replacement) {
+          await tx.lokasiAbsen.update({
+            where: { id: replacement.id },
             data: { is_active: true },
           });
         }
       }
-    }
+    });
 
     res.json({ message: "Lokasi berhasil dihapus" });
   } catch (error) {
@@ -150,16 +161,16 @@ router.put("/api/lokasi/:id/activate", authMiddleware, adminOnly, async (req, re
       return res.status(404).json({ error: "Lokasi tidak ditemukan" });
     }
 
-    // Nonaktifkan semua lokasi
-    await prisma.lokasiAbsen.updateMany({
-      where: { is_active: true },
-      data: { is_active: false },
-    });
+    await prisma.$transaction(async (tx) => {
+      await tx.lokasiAbsen.updateMany({
+        where: { is_active: true },
+        data: { is_active: false },
+      });
 
-    // Aktifkan lokasi yang dipilih
-    await prisma.lokasiAbsen.update({
-      where: { id: parseInt(id) },
-      data: { is_active: true },
+      await tx.lokasiAbsen.update({
+        where: { id: parseInt(id) },
+        data: { is_active: true },
+      });
     });
 
     res.json({ message: `Lokasi "${existing.nama_lokasi}" diaktifkan` });

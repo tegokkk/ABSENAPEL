@@ -1,16 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../utils/prisma');
-const { authMiddleware, adminOnly } = require('../middlewares/auth');
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const SECRET_KEY = process.env.JWT_SECRET || "smartattendance_timdis_2024";
 
 // =============================================
 // SEED — Reset dan isi ulang database
 // =============================================
 
 router.get("/api/seed", async (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(404).json({ error: "Endpoint tidak ditemukan" });
+  }
+
   try {
     // Hapus semua data lama
     await prisma.attendance.deleteMany();

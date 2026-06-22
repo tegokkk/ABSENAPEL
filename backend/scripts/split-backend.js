@@ -49,7 +49,7 @@ fs.writeFileSync(path.join(srcDir, 'utils/helpers.js'), helpersContent);
 // Middlewares
 let middlewaresRaw = extractSection('MIDDLEWARE', 'AUTH');
 // Add imports
-let middlewaresContent = `const jwt = require("jsonwebtoken");\nconst SECRET_KEY = process.env.JWT_SECRET || "smartattendance_timdis_2024";\n\n` + middlewaresRaw;
+let middlewaresContent = `const jwt = require("jsonwebtoken");\nconst { getJwtSecret } = require("../utils/config");\n\n` + middlewaresRaw.replace(/SECRET_KEY/g, 'getJwtSecret()');
 middlewaresContent += `\n\nmodule.exports = { authMiddleware, adminOnly };`;
 fs.writeFileSync(path.join(srcDir, 'middlewares/auth.js'), middlewaresContent);
 
@@ -73,8 +73,11 @@ function createRouteFile(filename, sectionHeader, nextSectionHeader) {
     // special imports
     if (filename === 'auth.routes.js' || filename === 'users.routes.js' || filename === 'seed.routes.js') {
         imports.push(`const bcrypt = require("bcryptjs");`);
+    }
+    if (filename === 'auth.routes.js') {
         imports.push(`const jwt = require("jsonwebtoken");`);
-        imports.push(`const SECRET_KEY = process.env.JWT_SECRET || "smartattendance_timdis_2024";`);
+        imports.push(`const { getJwtSecret } = require("../utils/config");`);
+        sectionRaw = sectionRaw.replace(/SECRET_KEY/g, 'getJwtSecret()');
     }
     if (filename === 'settings.routes.js' || filename === 'attendance.routes.js') {
         imports.push(`const { getSettings, getDistance, getClientIP } = require('../utils/helpers');`);

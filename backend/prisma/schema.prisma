@@ -25,6 +25,9 @@ model User {
   attendances Attendance[]
   izin        PengajuanIzin[]
   logs        ActivityLog[]
+
+  @@index([kelas])
+  @@index([kelasId])
 }
 
 model Attendance {
@@ -51,6 +54,11 @@ model Attendance {
   nama_lokasi_aktif String? // Nama lokasi tempat absen
   created_at        DateTime    @default(now())
   updated_at        DateTime    @updatedAt
+
+  @@unique([userId, jadwalId])
+  @@index([tanggal])
+  @@index([created_at])
+  @@index([status])
 }
 
 model LokasiAbsen {
@@ -63,6 +71,9 @@ model LokasiAbsen {
   is_default   Boolean  @default(false)
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
+
+  @@index([is_active])
+  @@index([is_default])
 }
 
 model Settings {
@@ -111,6 +122,8 @@ model JadwalApel {
   attendances   Attendance[]
   created_at    DateTime     @default(now())
   updated_at    DateTime     @updatedAt
+
+  @@index([is_active, waktu_mulai, waktu_selesai])
 }
 
 model PengajuanIzin {
@@ -126,6 +139,9 @@ model PengajuanIzin {
   approved_by   Int?
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
+
+  @@index([userId, status])
+  @@index([created_at])
 }
 
 model ActivityLog {

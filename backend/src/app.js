@@ -12,6 +12,8 @@ app.use(cors({
       origin.includes("netlify.app") ||
       origin.includes("vercel.app") ||
       origin.includes("localhost") ||
+      origin.includes("192.168.") ||
+      origin.includes("10.") ||
       origin === process.env.FRONTEND_URL
     ) {
       callback(null, true);
@@ -33,7 +35,9 @@ app.use(require('./routes/users.routes'));
 app.use(require('./routes/jadwal.routes'));
 app.use(require('./routes/izin.routes'));
 app.use(require('./routes/attendance.routes'));
-app.use(require('./routes/seed.routes'));
+if (process.env.NODE_ENV !== "production") {
+  app.use(require('./routes/seed.routes'));
+}
 
 const { errorHandler } = require('./middlewares/error');
 

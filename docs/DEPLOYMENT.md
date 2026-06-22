@@ -19,4 +19,7 @@ Pastikan hal berikut dikonfigurasi pada dashboard host Anda (contoh Netlify Env)
 
 ## Alur Netlify
 Berdasarkan `netlify.toml`, aplikasi akan membuild root `package.json` yang akan memicu command Vite build untuk frontend.
-Lalu Netlify Functions akan menangkap semua route `/api/*` dan meneruskannya ke file `netlify/functions/api.js` (yang memanggil `backend/index.js` -> `backend/src/app.js`).
+Lalu Netlify Functions akan menangkap semua route `/api/*` dan meneruskannya ke file `netlify/functions/api.js` (yang memanggil `backend/src/app.js`).
+
+## Catatan Backend Terpisah
+Jika backend di-host terpisah seperti Railway/Render/Nixpacks, gunakan `backend/server.js` sebagai entrypoint dan set `VITE_API_URL` di frontend ke URL backend production.
