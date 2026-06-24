@@ -15,6 +15,8 @@
     <img alt="Prisma" src="https://img.shields.io/badge/Prisma-5-20232A?style=flat&logo=prisma&logoColor=FFFFFF&labelColor=2D3748" />
     <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-Supabase-20232A?style=flat&logo=postgresql&logoColor=FFFFFF&labelColor=4169E1" />
   </p>
+
+  <img src="docs/banner.png" alt="Smart Attendance preview" width="100%" />
 </div>
 
 ---
