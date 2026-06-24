@@ -4,8 +4,8 @@
   <hr />
 
   <p>
-    Web absensi apel digital minimalis untuk Manajemen Informatika dengan validasi GPS,
-    selfie langsung, dashboard monitoring, pengajuan izin, dan admin panel.
+    Web absensi apel digital untuk Manajemen Informatika dengan validasi GPS,
+    selfie langsung, pengajuan izin, dashboard monitoring, dan admin panel.
   </p>
 
   <p>
@@ -15,77 +15,89 @@
     <img alt="Prisma" src="https://img.shields.io/badge/Prisma-5-20232A?style=flat&logo=prisma&logoColor=FFFFFF&labelColor=2D3748" />
     <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-Supabase-20232A?style=flat&logo=postgresql&logoColor=FFFFFF&labelColor=4169E1" />
   </p>
-
-  <br />
 </div>
 
 ---
 
 ## Tentang Proyek
 
-Smart Attendance adalah aplikasi absensi digital yang dibuat untuk membantu proses apel mahasiswa dan administrasi kehadiran secara lebih rapi, cepat, dan transparan.
+Smart Attendance adalah aplikasi absensi apel berbasis web yang membantu proses pencatatan kehadiran mahasiswa secara lebih cepat, rapi, dan transparan.
 
-Sistem ini memadukan geofencing berbasis GPS, validasi kamera/selfie, pengajuan izin digital, serta dashboard admin untuk memantau kehadiran saat jadwal apel berlangsung.
+Sistem ini dibuat untuk mengurangi manipulasi presensi dengan menggabungkan validasi lokasi, bukti selfie langsung, waktu server, dan dashboard admin untuk memantau kehadiran saat apel berlangsung.
 
-## Sorotan Fitur
+## Fitur Utama
 
-| Area | Fitur |
+| Role | Fitur |
 | --- | --- |
-| Mahasiswa | Presensi berbasis radius lokasi, selfie langsung, riwayat kehadiran, dan pengajuan izin/sakit/surat tugas |
-| Admin | Dashboard live, validasi izin, kelola mahasiswa, kelas, jurusan, program studi, dan titik lokasi apel |
-| Keamanan Presensi | Validasi jarak, akurasi lokasi, waktu server, dan bukti foto untuk mengurangi manipulasi absensi |
-| Rekap Data | Data kehadiran lebih mudah dipantau, divalidasi, dan disiapkan untuk kebutuhan laporan |
+| Mahasiswa | Login, absensi apel berbasis GPS, selfie langsung, riwayat kehadiran, dan pengajuan izin |
+| Admin | Dashboard monitoring, kelola mahasiswa, kelas, jurusan, program studi, jadwal apel, lokasi, dan validasi izin |
+| Sistem | Validasi radius lokasi, status terlambat, upload bukti foto, rekap absensi, dan audit aktivitas |
 
 ## Tech Stack
 
-- **Frontend:** React, Vite, Tailwind CSS, Leaflet, React Router
-- **Backend:** Node.js, Express.js, Prisma ORM
-- **Database:** PostgreSQL / Supabase
-- **Tools:** Concurrently, Vercel/Netlify configuration, modular monorepo scripts
+| Bagian | Teknologi |
+| --- | --- |
+| Frontend | React, Vite, Tailwind CSS, React Router, Leaflet, React Webcam |
+| Backend | Node.js, Express.js, JWT, Multer, ExcelJS |
+| Database | PostgreSQL / Supabase |
+| ORM | Prisma |
+| Tools | Concurrently, Nodemon, Netlify, Vercel |
 
-## Struktur Proyek
+## Struktur Folder
 
 ```text
 ABSENSI-APEL/
-|-- archive/          # Arsip, backup, dan versi lama
-|-- backend/          # API Express, Prisma schema, scripts, uploads
-|-- docs/             # Dokumentasi teknis dan aset README
-|-- frontend/         # UI React, routing, komponen, dan service layer
+|-- archive/          # Arsip dan backup pengembangan
+|-- backend/          # REST API, Prisma schema, scripts, dan uploads
+|-- docs/             # Dokumentasi database, API, maintenance, dan deployment
+|-- frontend/         # Aplikasi React, halaman, komponen, dan service API
 |-- netlify/          # Konfigurasi deployment Netlify
-|-- package.json      # Script root untuk menjalankan monorepo
+|-- package.json      # Script root monorepo
 ```
 
 ## Dokumentasi
 
-- [Database](docs/DATABASE.md) - desain tabel, relasi, dan catatan skema
-- [API](docs/API.md) - daftar endpoint REST dan kontrak data
-- [Maintenance](docs/MAINTENANCE.md) - panduan seed, perawatan, dan operasional
-- [Deployment](docs/DEPLOYMENT.md) - panduan rilis ke production
+- [API](docs/API.md) - daftar endpoint dan kontrak request/response.
+- [Database](docs/DATABASE.md) - model utama, relasi, dan catatan Prisma.
+- [Maintenance](docs/MAINTENANCE.md) - panduan seed, perawatan, dan operasional.
+- [Deployment](docs/DEPLOYMENT.md) - panduan rilis ke production.
 
 ## Instalasi Lokal
 
-Pastikan Node.js dan npm sudah tersedia di perangkat.
+Pastikan perangkat sudah memiliki Node.js dan npm.
 
-1. Masuk ke folder root proyek.
-
-```bash
-cd ABSENSI-APEL
-```
-
-2. Install dependency backend dan frontend.
+1. Install dependency backend dan frontend.
 
 ```bash
 npm run install:all
 ```
 
-3. Siapkan environment variable.
+2. Siapkan file environment backend.
 
 ```bash
 cp backend/.env.example backend/.env
+```
+
+Isi konfigurasi utama berikut:
+
+```env
+PORT=5000
+JWT_SECRET=your_jwt_secret_here
+DATABASE_URL="postgresql://..."
+DIRECT_URL="postgresql://..."
+```
+
+3. Siapkan file environment frontend.
+
+```bash
 cp frontend/.env.example frontend/.env.local
 ```
 
-Isi `backend/.env` dengan koneksi PostgreSQL/Supabase, lalu sesuaikan `VITE_API_URL` pada `frontend/.env.local` agar mengarah ke URL backend.
+Untuk development lokal, arahkan frontend ke backend lokal:
+
+```env
+VITE_API_URL=http://localhost:5000
+```
 
 4. Generate Prisma client dan sinkronkan database.
 
@@ -95,7 +107,7 @@ npx prisma generate
 npx prisma db push
 ```
 
-Jika database masih kosong, jalankan seed dari folder `backend`.
+5. Jika database masih kosong, jalankan seed.
 
 ```bash
 npm run seed
@@ -103,16 +115,17 @@ npm run seed
 
 ## Menjalankan Aplikasi
 
-Dari folder root proyek, jalankan:
+Jalankan backend dan frontend sekaligus dari folder root:
 
 ```bash
 npm run dev
 ```
 
-Perintah ini menjalankan backend dan frontend secara bersamaan.
+URL default:
 
 - Frontend: `http://localhost:5173`
 - Backend: `http://localhost:5000`
+- API base path: `/api`
 
 ## Script Penting
 
@@ -122,19 +135,31 @@ Perintah ini menjalankan backend dan frontend secara bersamaan.
 | `npm run dev` | Menjalankan backend dan frontend bersamaan |
 | `npm run dev:backend` | Menjalankan backend saja |
 | `npm run dev:frontend` | Menjalankan frontend saja |
-| `npm run start` | Menjalankan backend mode start |
+| `npm run start` | Menjalankan backend mode production/start |
 | `npm run build:frontend` | Build frontend untuk production |
 
-## Fokus Pengembangan
+## Endpoint Ringkas
 
-- Presensi yang lebih sulit dimanipulasi melalui validasi lokasi dan bukti selfie.
-- Admin panel yang cepat untuk monitoring apel, validasi izin, dan rekap data.
-- Struktur proyek yang mudah dipelihara dengan pemisahan frontend, backend, dan dokumentasi.
+| Modul | Endpoint Utama |
+| --- | --- |
+| Auth | `POST /api/login` |
+| Mahasiswa | `GET /api/users`, `POST /api/users`, `PUT /api/users/:id`, `DELETE /api/users/:id` |
+| Absensi | `GET /api/attendance`, `POST /api/attendance/apel`, `GET /api/attendance/stats` |
+| Izin | `GET /api/izin`, `POST /api/izin`, `PUT /api/izin/:id/status` |
+| Jadwal | `GET /api/jadwal`, `POST /api/jadwal`, `PUT /api/jadwal/:id/status` |
+| Lokasi | `GET /api/lokasi`, `POST /api/lokasi`, `PUT /api/lokasi/:id/activate` |
+
+## Fokus Sistem
+
+- Absensi lebih akurat dengan validasi lokasi dan bukti selfie.
+- Admin dapat memantau data apel secara langsung dan terstruktur.
+- Data akademik, jadwal, lokasi, izin, dan rekap absensi dikelola dalam satu sistem.
+- Struktur monorepo memisahkan frontend, backend, dan dokumentasi agar mudah dirawat.
 
 ---
 
 <div align="center">
   <strong>Dibuat untuk Manajemen Informatika - Politeknik Negeri Lampung</strong>
   <br />
-  Mempermudah pemantauan kedisiplinan secara otomatis, real-time, dan terukur.
+  Smart Attendance membantu proses apel menjadi lebih cepat, tertib, dan terukur.
 </div>
