@@ -1,88 +1,136 @@
 <div align="center">
-  <h1>Smart Attendance - Manajemen Informatika</h1>
-  <p><strong>Aplikasi Sistem Absensi Apel Digital Berbasis Web Terintegrasi GPS & Pengenalan Wajah</strong></p>
+  <img src="docs/banner.png" alt="Smart Attendance login preview" width="100%" />
+
+  <h1>Smart Attendance - Absensi Apel Digital</h1>
+  <p>
+    Sistem absensi apel berbasis web untuk Manajemen Informatika dengan validasi GPS,
+    selfie langsung, dan dashboard monitoring real-time.
+  </p>
+
+  <p>
+    <img alt="React" src="https://img.shields.io/badge/Frontend-React%20%2B%20Vite-61DAFB?style=for-the-badge&logo=react&logoColor=111827" />
+    <img alt="Node.js" src="https://img.shields.io/badge/Backend-Node.js%20%2B%20Express-339933?style=for-the-badge&logo=node.js&logoColor=white" />
+    <img alt="PostgreSQL" src="https://img.shields.io/badge/Database-PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
+    <img alt="Prisma" src="https://img.shields.io/badge/ORM-Prisma-2D3748?style=for-the-badge&logo=prisma&logoColor=white" />
+  </p>
 </div>
 
 ---
 
-Aplikasi sistem absensi digital ini dirancang khusus untuk program studi Manajemen Informatika. Sistem ini menggunakan metode presensi modern berbasis Geofencing (GPS Radius) serta diwajibkan menggunakan Foto Selfie Langsung (Webcam/Kamera Smartphone). Tujuannya adalah untuk secara signifikan mengurangi tingkat kecurangan (fraud) seperti penggunaan Fake GPS maupun penitipan absen.
+## Tentang Proyek
 
-## Fitur Utama
+Smart Attendance adalah aplikasi absensi digital yang dibuat untuk membantu proses apel mahasiswa dan administrasi kehadiran secara lebih rapi, cepat, dan transparan.
 
-### Modul Mahasiswa
-- **Presensi Pintar:** Pengecekan jarak lokasi (distance) otomatis. Mahasiswa hanya dapat melakukan absensi apabila berada di dalam radius lokasi apel aktif.
-- **Deteksi Akurasi & Waktu Sebenarnya:** Mencegah manipulasi waktu pada perangkat. Server menggunakan waktu internal (GMT) dan mendeteksi indikasi Fake GPS melalui metadata akurasi perangkat.
-- **Verifikasi Selfie:** Menangkap wajah secara real-time menggunakan kamera perangkat untuk memastikan kehadiran fisik secara akurat.
-- **Histori Kehadiran:** Pemantauan jadwal absensi dan riwayat keterlambatan secara transparan.
-- **Pengajuan Izin Digital:** Mahasiswa dapat mengajukan keterangan sakit, izin, atau surat tugas beserta lampiran bukti foto secara terstruktur.
+Sistem ini memadukan geofencing berbasis GPS, validasi kamera/selfie, pengajuan izin digital, serta dashboard admin untuk memantau kehadiran saat jadwal apel berlangsung.
 
-### Modul Admin (TIMDIS)
-- **Dashboard Pemantauan (Live):** Pelacakan status kehadiran secara langsung saat jadwal apel aktif, termasuk pratinjau foto selfie mahasiswa.
-- **Master Data Dinamis:** Pengelolaan data Jurusan, Program Studi, Kelas, dan Data Mahasiswa secara langsung dari antarmuka Web.
-- **Konfigurasi Titik Lokasi:** Pengaturan Koordinat (Latitude, Longitude) dan Radius (Meter) titik kumpul apel. Mendukung sistem multi-lokasi.
-- **Validasi Izin:** Proses persetujuan (Approve) atau penolakan (Reject) surat izin mahasiswa dengan antarmuka yang efisien.
+## Sorotan Fitur
 
-## Teknologi
+| Area | Fitur |
+| --- | --- |
+| Mahasiswa | Presensi berbasis radius lokasi, selfie langsung, riwayat kehadiran, dan pengajuan izin/sakit/surat tugas |
+| Admin | Dashboard live, validasi izin, kelola mahasiswa, kelas, jurusan, program studi, dan titik lokasi apel |
+| Keamanan Presensi | Validasi jarak, akurasi lokasi, waktu server, dan bukti foto untuk mengurangi manipulasi absensi |
+| Rekap Data | Data kehadiran lebih mudah dipantau, divalidasi, dan disiapkan untuk kebutuhan laporan |
 
-- **Frontend:** React + Vite, Tailwind CSS, Leaflet JS.
-- **Backend:** Node.js, Express.js (Modular Architecture).
-- **Database:** PostgreSQL (Supabase), Prisma ORM.
-- **Arsitektur:** Monorepo terintegrasi (concurrently).
+## Tech Stack
+
+- **Frontend:** React, Vite, Tailwind CSS, Leaflet, React Router
+- **Backend:** Node.js, Express.js, Prisma ORM
+- **Database:** PostgreSQL / Supabase
+- **Tools:** Concurrently, Vercel/Netlify configuration, modular monorepo scripts
 
 ## Struktur Proyek
 
-Proyek ini telah menerapkan Clean Code architecture dan pemisahan komponen.
-
-```bash
-ABSENSI-APEL
- |__ archive/      # File backup dan versi lama yang disimpan untuk dokumentasi
- |__ backend/      # Core API Node.js/Express, Prisma Schema, dan Modular Routes
- |__ docs/         # Dokumentasi spesifik (Wajib dibaca oleh Developer)
- |__ frontend/     # UI React, Components, dan API Service Layer
- |__ package.json  # Root NPM Script untuk Monorepo Command
+```text
+ABSENSI-APEL/
+|-- archive/          # Arsip, backup, dan versi lama
+|-- backend/          # API Express, Prisma schema, scripts, uploads
+|-- docs/             # Dokumentasi teknis dan aset README
+|-- frontend/         # UI React, routing, komponen, dan service layer
+|-- netlify/          # Konfigurasi deployment Netlify
+|-- package.json      # Script root untuk menjalankan monorepo
 ```
 
-Catatan: Jangan lupakan folder docs! Di dalamnya berisi panduan mendalam:
-- [DATABASE.md](docs/DATABASE.md): ERD dan Penjelasan Tabel
-- [API.md](docs/API.md): Rincian REST Endpoints
-- [MAINTENANCE.md](docs/MAINTENANCE.md): Panduan Seed & Perawatan
-- [DEPLOYMENT.md](docs/DEPLOYMENT.md): Panduan Rilis ke Production
+## Dokumentasi
 
-## Persiapan & Instalasi
+- [Database](docs/DATABASE.md) - desain tabel, relasi, dan catatan skema
+- [API](docs/API.md) - daftar endpoint REST dan kontrak data
+- [Maintenance](docs/MAINTENANCE.md) - panduan seed, perawatan, dan operasional
+- [Deployment](docs/DEPLOYMENT.md) - panduan rilis ke production
 
-Pastikan Anda memiliki Node.js terpasang di sistem.
+## Instalasi Lokal
 
-**1. Clone atau Ekstrak Repository ini.**
-Buka terminal dan arahkan ke dalam direktori root proyek (ABSENSI-APEL).
+Pastikan Node.js dan npm sudah tersedia di perangkat.
 
-**2. Instalasi Dependensi Semua Layanan**
-Jalankan satu baris perintah ini untuk menginstal module di backend maupun frontend:
+1. Masuk ke folder root proyek.
+
+```bash
+cd ABSENSI-APEL
+```
+
+2. Install dependency backend dan frontend.
+
 ```bash
 npm run install:all
 ```
 
-**3. Atur Environment Variables**
-- Salin `backend/.env.example` ke `backend/.env` dan isi dengan URL PostgreSQL Supabase Anda.
-- Salin `frontend/.env.example` ke `frontend/.env.local` (Bila belum ada, sesuaikan VITE_API_URL menunjuk ke URL backend).
+3. Siapkan environment variable.
 
-**4. Generate Prisma & Migrasi**
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env.local
+```
+
+Isi `backend/.env` dengan koneksi PostgreSQL/Supabase, lalu sesuaikan `VITE_API_URL` pada `frontend/.env.local` agar mengarah ke URL backend.
+
+4. Generate Prisma client dan sinkronkan database.
+
 ```bash
 cd backend
 npx prisma generate
 npx prisma db push
 ```
-(Jika Anda baru mengosongkan database, silakan lakukan seed dengan perintah `npm run seed` dari dalam folder backend)
 
-## Menjalankan Aplikasi Lokal
+Jika database masih kosong, jalankan seed dari folder `backend`.
 
-Kembali ke root direktori proyek (ABSENSI-APEL), kemudian jalankan perintah berikut:
+```bash
+npm run seed
+```
+
+## Menjalankan Aplikasi
+
+Dari folder root proyek, jalankan:
 
 ```bash
 npm run dev
 ```
 
-Ini akan menjalankan Backend (Port 5000) dan Frontend (Port 5173) secara bersamaan.
-Buka `http://localhost:5173/` di web browser Anda.
+Perintah ini menjalankan backend dan frontend secara bersamaan.
+
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:5000`
+
+## Script Penting
+
+| Command | Fungsi |
+| --- | --- |
+| `npm run install:all` | Install dependency backend dan frontend |
+| `npm run dev` | Menjalankan backend dan frontend bersamaan |
+| `npm run dev:backend` | Menjalankan backend saja |
+| `npm run dev:frontend` | Menjalankan frontend saja |
+| `npm run start` | Menjalankan backend mode start |
+| `npm run build:frontend` | Build frontend untuk production |
+
+## Fokus Pengembangan
+
+- Presensi yang lebih sulit dimanipulasi melalui validasi lokasi dan bukti selfie.
+- Admin panel yang cepat untuk monitoring apel, validasi izin, dan rekap data.
+- Struktur proyek yang mudah dipelihara dengan pemisahan frontend, backend, dan dokumentasi.
 
 ---
-Dibuat untuk Manajemen Informatika - Mempermudah pemantauan kedisiplinan secara otomatis, real-time, dan meminimalisir manipulasi presensi.
+
+<div align="center">
+  <strong>Dibuat untuk Manajemen Informatika - Politeknik Negeri Lampung</strong>
+  <br />
+  Mempermudah pemantauan kedisiplinan secara otomatis, real-time, dan terukur.
+</div>
