@@ -1,18 +1,22 @@
 <div align="center">
-  <img src="docs/banner.png" alt="Smart Attendance login preview" width="100%" />
+  <h1>SMART ATTENDANCE</h1>
 
-  <h1>Smart Attendance - Absensi Apel Digital</h1>
+  <hr />
+
   <p>
-    Sistem absensi apel berbasis web untuk Manajemen Informatika dengan validasi GPS,
-    selfie langsung, dan dashboard monitoring real-time.
+    Web absensi apel digital minimalis untuk Manajemen Informatika dengan validasi GPS,
+    selfie langsung, dashboard monitoring, pengajuan izin, dan admin panel.
   </p>
 
   <p>
-    <img alt="React" src="https://img.shields.io/badge/Frontend-React%20%2B%20Vite-61DAFB?style=for-the-badge&logo=react&logoColor=111827" />
-    <img alt="Node.js" src="https://img.shields.io/badge/Backend-Node.js%20%2B%20Express-339933?style=for-the-badge&logo=node.js&logoColor=white" />
-    <img alt="PostgreSQL" src="https://img.shields.io/badge/Database-PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
-    <img alt="Prisma" src="https://img.shields.io/badge/ORM-Prisma-2D3748?style=for-the-badge&logo=prisma&logoColor=white" />
+    <img alt="React" src="https://img.shields.io/badge/React-19-20232A?style=flat&logo=react&logoColor=61DAFB&labelColor=3B3F46" />
+    <img alt="Vite" src="https://img.shields.io/badge/Vite-8-20232A?style=flat&logo=vite&logoColor=FFD62E&labelColor=5B5FEF" />
+    <img alt="Express" src="https://img.shields.io/badge/Express-5-20232A?style=flat&logo=express&logoColor=FFFFFF&labelColor=555555" />
+    <img alt="Prisma" src="https://img.shields.io/badge/Prisma-5-20232A?style=flat&logo=prisma&logoColor=FFFFFF&labelColor=2D3748" />
+    <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-Supabase-20232A?style=flat&logo=postgresql&logoColor=FFFFFF&labelColor=4169E1" />
   </p>
+
+  <br />
 </div>
 
 ---
