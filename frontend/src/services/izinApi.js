@@ -13,4 +13,8 @@ export const izinApi = {
     const response = await apiClient.put(`/izin/${id}/status`, { status });
     return response.data;
   },
+  deleteIzin: async (id) => {
+    const response = await apiClient.delete(`/izin/${id}`);
+    return response.data;
+  },
 };

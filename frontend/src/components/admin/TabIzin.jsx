@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, X as XIcon, Eye } from 'lucide-react';
+import { Check, X as XIcon, Eye, Trash2 } from 'lucide-react';
 import Card, { CardHeader } from '../ui/Card';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
@@ -33,6 +33,17 @@ export default function TabIzin() {
     } catch (e) {
       const msg = e.response?.data?.error || e.response?.data?.message || e.message || 'Gagal update status';
       alert(`Gagal update status: ${msg}`);
+    }
+  });
+
+  const handleDeleteIzin = guardAction(async (id, namaUser) => {
+    if (!confirm(`Yakin ingin menghapus data izin milik ${namaUser}? Tindakan ini tidak dapat dibatalkan.`)) return;
+    try {
+      await izinApi.deleteIzin(id);
+      fetchData();
+    } catch (e) {
+      const msg = e.response?.data?.error || e.response?.data?.message || e.message || 'Gagal menghapus izin';
+      alert(`Gagal menghapus: ${msg}`);
     }
   });
 
@@ -100,6 +111,16 @@ export default function TabIzin() {
                         <XIcon size={14} /> Tolak
                       </Button>
                     </>
+                  )}
+                  {i.status === 'APPROVED' && (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => handleDeleteIzin(i.id, i.user?.name)}
+                      title="Hapus izin yang sudah disetujui"
+                    >
+                      <Trash2 size={14} /> Hapus
+                    </Button>
                   )}
                 </td>
               </tr>

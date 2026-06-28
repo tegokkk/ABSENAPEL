@@ -81,4 +81,18 @@ router.put("/api/izin/:id/status", authMiddleware, adminOnly, async (req, res) =
   }
 });
 
+router.delete("/api/izin/:id", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.pengajuanIzin.findUnique({ where: { id: parseInt(id) } });
+    if (!existing) {
+      return res.status(404).json({ error: "Data izin tidak ditemukan" });
+    }
+    await prisma.pengajuanIzin.delete({ where: { id: parseInt(id) } });
+    res.json({ message: "Data izin berhasil dihapus" });
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 module.exports = router;
