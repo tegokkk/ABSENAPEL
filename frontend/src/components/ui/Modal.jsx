@@ -1,8 +1,11 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useId, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 
 export default function Modal({ open, onClose, title, children, size = 'md' }) {
+  const titleId = useId();
+  const panelRef = useRef(null);
+
   const handleEsc = useCallback(
     (e) => {
       if (e.key === 'Escape') onClose?.();
@@ -14,6 +17,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
     if (open) {
       document.addEventListener('keydown', handleEsc);
       document.body.style.overflow = 'hidden';
+      window.setTimeout(() => panelRef.current?.focus(), 0);
     }
     return () => {
       document.removeEventListener('keydown', handleEsc);
@@ -43,6 +47,11 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
           />
           {/* Panel */}
           <motion.div
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={title ? titleId : undefined}
+            tabIndex={-1}
             initial={{ opacity: 0, scale: 0.96, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
@@ -58,13 +67,15 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
                 className="flex items-center justify-between px-5 py-4"
                 style={{ borderBottom: '1px solid var(--border)' }}
               >
-                <h3 className="text-primary truncate text-base font-bold">
+                <h3 id={titleId} className="text-primary truncate text-base font-bold">
                   {title}
                 </h3>
                 <button
+                  type="button"
                   onClick={onClose}
-                  className="p-1.5 rounded-lg transition-colors"
+                  className="p-1.5 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-accent-500/40"
                   style={{ color: 'var(--text-muted)' }}
+                  aria-label="Tutup modal"
                   onMouseEnter={e => {
                     e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
                     e.currentTarget.style.color = 'var(--text-primary)';

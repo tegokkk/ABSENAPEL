@@ -29,7 +29,7 @@ const Button = forwardRef(
         ref={ref}
         disabled={disabled || loading}
         className={clsx(
-          'inline-flex min-w-0 items-center justify-center gap-2 rounded-lg font-semibold leading-none transition-all focus:outline-none focus:ring-2 focus:ring-accent-500/25 [&>svg]:shrink-0',
+          'inline-flex min-w-0 items-center justify-center gap-2 rounded-lg font-semibold leading-none transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-base)] [&>svg]:shrink-0',
           variants[variant],
           sizes[size],
           (disabled || loading) && 'opacity-40 cursor-not-allowed pointer-events-none',

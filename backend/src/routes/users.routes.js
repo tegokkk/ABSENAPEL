@@ -4,6 +4,12 @@ const prisma = require('../utils/prisma');
 const { authMiddleware, adminOnly } = require('../middlewares/auth');
 const bcrypt = require("bcryptjs");
 
+const findKelasByName = async (namaKelas) => {
+  const cleanName = typeof namaKelas === "string" ? namaKelas.trim() : "";
+  if (!cleanName) return null;
+  return prisma.kelas.findFirst({ where: { nama_kelas: cleanName } });
+};
+
 // =============================================
 // USERS — CRUD (Admin Only)
 // =============================================
@@ -41,6 +47,7 @@ router.post("/api/users", authMiddleware, adminOnly, async (req, res) => {
         .json({ error: "Nama, NPM, dan kelas wajib diisi" });
     }
 
+    const kelasMaster = await findKelasByName(kelas);
     const hashedPassword = await bcrypt.hash(npm.trim(), 10);
     const user = await prisma.user.create({
       data: {
@@ -48,7 +55,8 @@ router.post("/api/users", authMiddleware, adminOnly, async (req, res) => {
         password: hashedPassword,
         name: name.trim(),
         npm: npm.trim(),
-        kelas,
+        kelas: kelas.trim(),
+        kelasId: kelasMaster?.id || null,
         role: "MAHASISWA",
       },
     });
@@ -76,7 +84,11 @@ router.put("/api/users/:id", authMiddleware, adminOnly, async (req, res) => {
       updateData.username = name.trim();
     }
     if (npm) updateData.npm = npm.trim();
-    if (kelas) updateData.kelas = kelas;
+    if (kelas) {
+      const kelasMaster = await findKelasByName(kelas);
+      updateData.kelas = kelas.trim();
+      updateData.kelasId = kelasMaster?.id || null;
+    }
 
     const user = await prisma.user.update({
       where: { id: parseInt(id) },

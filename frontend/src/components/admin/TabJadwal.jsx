@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2, Power, PowerOff } from 'lucide-react';
-import Card, { CardHeader } from '../ui/Card';
+import { CalendarClock, Plus, Trash2, Power, PowerOff } from 'lucide-react';
+import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Badge from '../ui/Badge';
-import Table, { EmptyRow } from '../ui/Table';
+import Table from '../ui/Table';
 import { jadwalApi } from '../../services/jadwalApi';
 import { useButtonGuard } from '../../hooks/useDebounce';
+import { ActionDropdown, AdminEmptyState, AdminModuleHeader, AdminSkeletonRows } from '../ui/AdminPrimitives';
 
 /**
  * Konversi nilai dari input datetime-local ("YYYY-MM-DDTHH:mm") ke ISO 8601
@@ -32,9 +33,10 @@ function formatWIB(isoString) {
   });
 }
 
-export default function TabJadwal() {
+export default function TabJadwal({ notify, requestConfirm }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
   const [form, setForm] = useState({
     nama_kegiatan: '',
     waktu_mulai: '',
@@ -46,7 +48,9 @@ export default function TabJadwal() {
   const [, guardAction] = useButtonGuard(1200);
 
   const fetchData = useCallback(async () => {
+    setFetching(true);
     try { setData(await jadwalApi.getJadwal()); } catch (error) { console.error(error); }
+    finally { setFetching(false); }
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -63,26 +67,55 @@ export default function TabJadwal() {
       };
       await jadwalApi.createJadwal(payload);
       setForm({ nama_kegiatan: '', waktu_mulai: '', batas_terlambat: '', waktu_selesai: '', deskripsi: '', is_active: true });
+      notify({ type: 'success', title: 'Jadwal ditambahkan', message: payload.nama_kegiatan });
       fetchData();
-    } catch { alert('Gagal menambah jadwal'); } finally { setLoading(false); }
+    } catch {
+      notify({ type: 'error', title: 'Gagal menambah jadwal', message: 'Periksa kembali waktu dan nama kegiatan.' });
+    } finally { setLoading(false); }
   });
 
   const handleDelete = guardAction(async (id) => {
-    if (!confirm('Yakin hapus jadwal ini?')) return;
-    try { await jadwalApi.deleteJadwal(id); fetchData(); } catch { alert('Gagal hapus'); }
+    const confirmed = await requestConfirm({
+      title: 'Hapus jadwal?',
+      description: 'Jadwal apel ini akan dihapus dari daftar.',
+      confirmLabel: 'Hapus',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+    try {
+      await jadwalApi.deleteJadwal(id);
+      notify({ type: 'success', title: 'Jadwal dihapus', message: 'Daftar jadwal berhasil diperbarui.' });
+      fetchData();
+    } catch {
+      notify({ type: 'error', title: 'Gagal hapus jadwal', message: 'Coba ulangi beberapa saat lagi.' });
+    }
   });
 
   const handleToggleActive = guardAction(async (jadwal) => {
     try {
       await jadwalApi.updateJadwal(jadwal.id, { is_active: !jadwal.is_active });
+      notify({
+        type: 'success',
+        title: jadwal.is_active ? 'Jadwal dinonaktifkan' : 'Jadwal diaktifkan',
+        message: jadwal.nama_kegiatan,
+      });
       fetchData();
-    } catch { alert('Gagal update status'); }
+    } catch {
+      notify({ type: 'error', title: 'Gagal update status', message: 'Coba ulangi beberapa saat lagi.' });
+    }
   });
 
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader title="Manajemen Jadwal Apel" />
+        <AdminModuleHeader
+          title="Manajemen Jadwal Apel"
+          description="Atur waktu buka absen, batas terlambat, dan status jadwal apel aktif."
+          icon={CalendarClock}
+        />
+      </Card>
+
+      <Card>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Input
             label="Nama Kegiatan"
@@ -124,17 +157,92 @@ export default function TabJadwal() {
       </Card>
 
       <Card>
+        <div className="block md:hidden">
+          {fetching ? (
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="rounded-lg border border-[var(--border-light)] bg-white/[.025] p-4">
+                  <div className="skeleton-line mb-3 w-3/4" />
+                  <div className="skeleton-line w-1/2" />
+                </div>
+              ))}
+            </div>
+          ) : data.length === 0 ? (
+            <AdminEmptyState
+              icon={CalendarClock}
+              title="Belum ada jadwal apel"
+              description="Tambahkan jadwal agar mahasiswa mengetahui waktu absensi yang aktif."
+            />
+          ) : (
+            <div className="space-y-3">
+              {data.map((j) => {
+                const now = new Date();
+                const start = new Date(j.waktu_mulai);
+                const end = new Date(j.waktu_selesai);
+                const isOngoing = j.is_active && now >= start && now <= end;
+
+                return (
+                  <div key={j.id} className="rounded-lg border border-[var(--border-light)] bg-white/[.025] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-primary">{j.nama_kegiatan}</p>
+                        <p className="mt-1 text-xs text-secondary">{j.deskripsi || '-'}</p>
+                      </div>
+                      <Badge variant={j.is_active ? 'success' : 'neutral'}>
+                        {j.is_active ? 'Aktif' : 'Nonaktif'}
+                      </Badge>
+                    </div>
+                    {isOngoing && <Badge variant="success" className="mt-3 animate-pulse">SEDANG BERLANGSUNG</Badge>}
+                    <div className="mt-3 grid grid-cols-1 gap-2 text-xs">
+                      <div className="rounded-lg border border-[var(--border-light)] bg-white/[.025] p-2">
+                        <p className="text-muted">Mulai</p>
+                        <p className="mt-1 font-mono text-secondary">{formatWIB(j.waktu_mulai)}</p>
+                      </div>
+                      <div className="rounded-lg border border-[var(--border-light)] bg-white/[.025] p-2">
+                        <p className="text-muted">Selesai</p>
+                        <p className="mt-1 font-mono text-secondary">{formatWIB(j.waktu_selesai)}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex justify-end">
+                      <ActionDropdown
+                        ariaLabel={`Aksi jadwal ${j.nama_kegiatan}`}
+                        items={[
+                          {
+                            label: j.is_active ? 'Nonaktifkan' : 'Aktifkan',
+                            icon: j.is_active ? <PowerOff size={14} /> : <Power size={14} />,
+                            tone: j.is_active ? 'dropdown-item-warning' : 'dropdown-item-success',
+                            onClick: () => handleToggleActive(j),
+                          },
+                          {
+                            label: 'Hapus',
+                            icon: <Trash2 size={14} />,
+                            tone: 'dropdown-item-danger',
+                            onClick: () => handleDelete(j.id),
+                          },
+                        ]}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="hidden md:block">
         <Table
           headers={[
             { label: 'Kegiatan' },
-            { label: 'Waktu Mulai' },
-            { label: 'Batas Terlambat' },
-            { label: 'Waktu Selesai' },
-            { label: 'Status Aktif', align: 'center' },
-            { label: 'Aksi', align: 'right' },
+            { label: 'Waktu Mulai', width: '21%' },
+            { label: 'Batas Terlambat', width: '21%' },
+            { label: 'Waktu Selesai', width: '21%' },
+            { label: 'Status Aktif', align: 'center', width: '140px' },
+            { label: 'Aksi', align: 'center', width: '96px' },
           ]}
         >
-          {data.map((j) => {
+          {fetching ? (
+            <AdminSkeletonRows rows={4} columns={6} />
+          ) : data.map((j) => {
             const now = new Date();
             const start = new Date(j.waktu_mulai);
             const end = new Date(j.waktu_selesai);
@@ -161,25 +269,45 @@ export default function TabJadwal() {
                   {formatWIB(j.waktu_selesai)}
                 </td>
                 <td className="text-center">
-                  <Button
-                    variant={j.is_active ? 'success' : 'secondary'}
-                    size="sm"
-                    onClick={() => handleToggleActive(j)}
-                  >
-                    {j.is_active ? <Power size={14} /> : <PowerOff size={14} />}
+                  <Badge variant={j.is_active ? 'success' : 'neutral'}>
                     {j.is_active ? 'Aktif' : 'Nonaktif'}
-                  </Button>
+                  </Badge>
                 </td>
-                <td className="text-right">
-                  <Button variant="danger" size="sm" onClick={() => handleDelete(j.id)}>
-                    <Trash2 size={14} />
-                  </Button>
+                <td className="text-center action-cell">
+                  <ActionDropdown
+                    ariaLabel={`Aksi jadwal ${j.nama_kegiatan}`}
+                    items={[
+                      {
+                        label: j.is_active ? 'Nonaktifkan' : 'Aktifkan',
+                        icon: j.is_active ? <PowerOff size={14} /> : <Power size={14} />,
+                        tone: j.is_active ? 'dropdown-item-warning' : 'dropdown-item-success',
+                        onClick: () => handleToggleActive(j),
+                      },
+                      {
+                        label: 'Hapus',
+                        icon: <Trash2 size={14} />,
+                        tone: 'dropdown-item-danger',
+                        onClick: () => handleDelete(j.id),
+                      },
+                    ]}
+                  />
                 </td>
               </tr>
             );
           })}
-          {data.length === 0 && <EmptyRow colSpan={6} />}
+          {!fetching && data.length === 0 && (
+            <tr>
+              <td colSpan={6}>
+                <AdminEmptyState
+                  icon={CalendarClock}
+                  title="Belum ada jadwal apel"
+                  description="Tambahkan jadwal agar mahasiswa mengetahui waktu absensi yang aktif."
+                />
+              </td>
+            </tr>
+          )}
         </Table>
+        </div>
       </Card>
     </div>
   );

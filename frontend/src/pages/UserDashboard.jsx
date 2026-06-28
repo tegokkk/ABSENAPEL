@@ -28,6 +28,8 @@ import Table, { EmptyRow } from '../components/ui/Table';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
+import { ToastViewport } from '../components/ui/Feedback';
+import { useToasts } from '../hooks/useUiFeedback';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -55,6 +57,26 @@ function parseBrowserInfo() {
   return { browser, platform };
 }
 
+const IZIN_STATUS_MAP = {
+  APPROVED: { variant: 'success', label: 'Disetujui' },
+  REJECTED: { variant: 'danger', label: 'Ditolak' },
+  PENDING: { variant: 'warning', label: 'Menunggu' },
+};
+
+function calculateDistanceMeters(from, to) {
+  if (!from || !to) return null;
+  const toRad = (value) => (value * Math.PI) / 180;
+  const earthRadius = 6371000;
+  const dLat = toRad(to.lat - from.lat);
+  const dLng = toRad(to.lng - from.lng);
+  const lat1 = toRad(from.lat);
+  const lat2 = toRad(to.lat);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 export default function UserDashboard({ user }) {
   const [location, setLocation] = useState(null);
   const [locationError, setLocationError] = useState('');
@@ -68,6 +90,7 @@ export default function UserDashboard({ user }) {
     MAX_RADIUS: 100,
     BATAS_TERLAMBAT: '08:00',
   });
+  const { toasts, notify, dismissToast } = useToasts();
 
   const webcamRef = useRef(null);
   const captureLockRef = useRef(false);
@@ -113,7 +136,7 @@ export default function UserDashboard({ user }) {
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
-      alert('Ukuran file terlalu besar. Maksimal 5MB.');
+      notify({ type: 'error', title: 'File terlalu besar', message: 'Maksimal ukuran lampiran adalah 5MB.' });
       return;
     }
     const reader = new FileReader();
@@ -135,7 +158,7 @@ export default function UserDashboard({ user }) {
 
   const submitIzin = guardIzin(async () => {
     if (!formIzin.tanggal_awal || !formIzin.tanggal_akhir || !formIzin.keterangan) {
-      alert('Semua field harus diisi!');
+      notify({ type: 'error', title: 'Form belum lengkap', message: 'Tanggal dan keterangan izin wajib diisi.' });
       return;
     }
     try {
@@ -151,9 +174,9 @@ export default function UserDashboard({ user }) {
       });
       setLampiranPreview(null);
       fetchIzins();
-      alert('Pengajuan izin berhasil dibuat');
+      notify({ type: 'success', title: 'Izin dikirim', message: 'Pengajuan izin berhasil dibuat.' });
     } catch {
-      alert('Gagal mengajukan izin');
+      notify({ type: 'error', title: 'Gagal mengajukan izin', message: 'Coba ulangi beberapa saat lagi.' });
     } finally {
       setIzinLoading(false);
     }
@@ -257,13 +280,50 @@ export default function UserDashboard({ user }) {
   });
 
   const officeCoord = [settings.OFFICE_LAT, settings.OFFICE_LON];
+  const distanceFromOffice = calculateDistanceMeters(
+    location,
+    { lat: settings.OFFICE_LAT, lng: settings.OFFICE_LON },
+  );
+  const isInsideRadius = distanceFromOffice != null ? distanceFromOffice <= Number(settings.MAX_RADIUS || 0) : false;
+  const gpsQuality = !location
+    ? { label: 'Menunggu lokasi', variant: 'warning' }
+    : location.accuracy > 100
+    ? { label: 'Akurasi rendah', variant: 'danger' }
+    : location.accuracy > 50
+    ? { label: 'Cukup akurat', variant: 'warning' }
+    : { label: 'Akurat', variant: 'success' };
+  const readinessItems = [
+    {
+      label: 'Lokasi',
+      value: location ? (isInsideRadius ? 'Dalam radius' : 'Di luar radius') : 'Belum tersedia',
+      ready: Boolean(location && isInsideRadius),
+      tone: location && !isInsideRadius ? 'text-danger-500' : 'text-accent-400',
+    },
+    {
+      label: 'Akurasi GPS',
+      value: location?.accuracy ? `${location.accuracy.toFixed(0)} m` : '-',
+      ready: Boolean(location && location.accuracy <= 100),
+      tone: gpsQuality.variant === 'danger' ? 'text-danger-500' : gpsQuality.variant === 'warning' ? 'text-warning-500' : 'text-accent-400',
+    },
+    {
+      label: 'Selfie',
+      value: imgSrc ? 'Siap dikirim' : 'Belum diambil',
+      ready: Boolean(imgSrc),
+      tone: imgSrc ? 'text-accent-400' : 'text-warning-500',
+    },
+    {
+      label: 'Tombol absen',
+      value: todayRecord ? 'Sudah absen' : location && imgSrc ? 'Siap' : 'Belum siap',
+      ready: Boolean(!todayRecord && location && imgSrc),
+      tone: todayRecord ? 'text-info-500' : location && imgSrc ? 'text-accent-400' : 'text-warning-500',
+    },
+  ];
 
   const todayBadgeVariant = todayRecord
     ? todayRecord.status === 'TERLAMBAT' ? 'warning' : 'success'
     : null;
 
-  const getBadgeVariant = (status) =>
-    status === 'APPROVED' ? 'success' : status === 'REJECTED' ? 'danger' : 'warning';
+  const getIzinStatus = (status) => IZIN_STATUS_MAP[status] || { variant: 'warning', label: status || 'Menunggu' };
 
   return (
     <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-3">
@@ -300,6 +360,26 @@ export default function UserDashboard({ user }) {
             </div>
           </div>
         </div>
+
+        <Card>
+          <CardHeader title="Status Kesiapan" subtitle="Pantau syarat absen sebelum mengirim." />
+          <div className="space-y-2">
+            {readinessItems.map((item) => (
+              <div key={item.label} className="readiness-item">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className={`readiness-dot ${item.ready ? 'text-accent-500/20 bg-accent-400' : 'text-warning-500/20 bg-warning-500'}`} />
+                  <span className="text-sm font-semibold text-primary">{item.label}</span>
+                </div>
+                <span className={`text-right text-xs font-semibold ${item.tone}`}>{item.value}</span>
+              </div>
+            ))}
+          </div>
+          {distanceFromOffice != null && (
+            <p className="text-xs leading-relaxed text-muted">
+              Jarak dari titik apel sekitar <span className="font-mono text-secondary">{distanceFromOffice.toFixed(1)} m</span> dari radius {settings.MAX_RADIUS} m.
+            </p>
+          )}
+        </Card>
 
         {/* Kamera Selfie */}
         <Card>
@@ -517,6 +597,44 @@ export default function UserDashboard({ user }) {
         {/* Riwayat Absensi */}
         <Card>
           <CardHeader title="Riwayat Absensi" />
+          <div className="block md:hidden">
+            {attendances.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-state-icon"><CalendarCheck size={20} /></div>
+                <p className="empty-state-text">Belum ada riwayat absensi.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {attendances.map((a) => (
+                  <div key={a.id_absensi} className="rounded-lg border border-[var(--border-light)] bg-white/[.025] p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-primary">
+                          {new Date(a.tanggal).toLocaleDateString('id-ID', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </p>
+                        <p className="mt-1 text-xs font-mono text-secondary">
+                          {a.jam_absen ? new Date(a.jam_absen).toLocaleTimeString('id-ID') : '-'}
+                        </p>
+                      </div>
+                      <Badge variant={a.status === 'TERLAMBAT' ? 'warning' : 'success'}>
+                        {a.status === 'TERLAMBAT' ? 'Terlambat' : 'Hadir'}
+                      </Badge>
+                    </div>
+                    {a.foto_selfie && (
+                      <a href={a.foto_selfie} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex text-xs font-semibold text-accent-400">
+                        Lihat foto selfie
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="hidden md:block">
           <Table
             headers={[
               { label: 'Tanggal' },
@@ -565,6 +683,7 @@ export default function UserDashboard({ user }) {
               ))
             )}
           </Table>
+          </div>
         </Card>
 
         {/* Riwayat Izin */}
@@ -578,6 +697,31 @@ export default function UserDashboard({ user }) {
               </Button>
             }
           />
+          <div className="block md:hidden">
+            {izins.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-state-icon"><FileText size={20} /></div>
+                <p className="empty-state-text">Belum ada riwayat izin.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {izins.map((i) => (
+                  <div key={i.id} className="rounded-lg border border-[var(--border-light)] bg-white/[.025] p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-primary">{i.jenis_izin}</p>
+                        <p className="mt-1 text-xs text-secondary">
+                          {new Date(i.tanggal_awal).toLocaleDateString('id-ID')} - {new Date(i.tanggal_akhir).toLocaleDateString('id-ID')}
+                        </p>
+                      </div>
+                      <Badge variant={getIzinStatus(i.status).variant}>{getIzinStatus(i.status).label}</Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="hidden md:block">
           <Table
             headers={[
               { label: 'Tanggal' },
@@ -596,12 +740,13 @@ export default function UserDashboard({ user }) {
                   </td>
                   <td className="text-xs" style={{ color: 'var(--text-secondary)' }}>{i.jenis_izin}</td>
                   <td className="text-center">
-                    <Badge variant={getBadgeVariant(i.status)}>{i.status}</Badge>
+                    <Badge variant={getIzinStatus(i.status).variant}>{getIzinStatus(i.status).label}</Badge>
                   </td>
                 </tr>
               ))
             )}
           </Table>
+          </div>
         </Card>
       </div>
 
@@ -738,6 +883,7 @@ export default function UserDashboard({ user }) {
           </div>
         </div>
       </Modal>
+      <ToastViewport toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

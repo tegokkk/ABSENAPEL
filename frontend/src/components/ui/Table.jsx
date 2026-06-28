@@ -5,18 +5,23 @@ export default function Table({ headers, children, className }) {
     <div className="table-wrap">
       <table className={clsx('data-table', className)}>
         {headers && (
+          <colgroup>
+            {headers.map((h, i) => (
+              <col key={i} style={h.width ? { width: h.width } : undefined} />
+            ))}
+          </colgroup>
+        )}
+        {headers && (
           <thead>
             <tr>
               {headers.map((h, i) => (
                 <th
                   key={i}
-                  className={
-                    h.align === 'right'
-                      ? 'text-right'
-                      : h.align === 'center'
-                      ? 'text-center'
-                      : ''
-                  }
+                  className={clsx(
+                    h.align === 'right' && 'text-right',
+                    h.align === 'center' && 'text-center',
+                    h.className,
+                  )}
                 >
                   {h.label}
                 </th>

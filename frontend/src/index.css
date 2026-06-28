@@ -297,6 +297,7 @@ svg {
 .data-table {
   @apply w-full text-sm;
   min-width: 720px;
+  table-layout: fixed;
 }
 
 .data-table thead {
@@ -325,6 +326,68 @@ svg {
   @apply px-4 py-3 align-middle;
 }
 
+.data-table th.text-center,
+.data-table td.text-center,
+.data-table td.action-cell {
+  text-align: center;
+}
+
+.action-cell {
+  white-space: nowrap;
+}
+
+.table-actions {
+  @apply inline-flex items-center justify-center gap-2;
+  width: max-content;
+  max-width: 100%;
+}
+
+.izin-table tbody td {
+  vertical-align: top;
+}
+
+.izin-table .izin-cell {
+  @apply px-4 py-4 text-left;
+}
+
+.izin-table td.action-cell {
+  text-align: left;
+  overflow: visible;
+}
+
+.action-chip {
+  @apply inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-xs font-semibold transition-all;
+  min-height: 34px;
+  white-space: nowrap;
+}
+
+.action-chip-info {
+  background: rgba(56,189,248,0.1);
+  color: #38bdf8;
+}
+
+.action-chip-info:hover {
+  background: rgba(56,189,248,0.2);
+}
+
+.action-chip-warning {
+  background: rgba(245,158,11,0.1);
+  color: #fbbf24;
+}
+
+.action-chip-warning:hover {
+  background: rgba(245,158,11,0.2);
+}
+
+.action-chip-danger {
+  background: rgba(239,68,68,0.1);
+  color: #f87171;
+}
+
+.action-chip-danger:hover {
+  background: rgba(239,68,68,0.2);
+}
+
 .data-table tbody tr:last-child {
   border-bottom: none;
 }
@@ -338,6 +401,57 @@ svg {
 .badge-danger { background: rgba(239,68,68,.15); color: #f87171; }
 .badge-info { background: rgba(56,189,248,.15); color: #38bdf8; }
 .badge-neutral { background: rgba(255,255,255,.06); color: var(--text-secondary); }
+
+.toast {
+  @apply flex items-start gap-3 rounded-lg p-3 shadow-elevated;
+  background: rgba(22,27,34,.96);
+  border: 1px solid var(--border);
+  box-shadow: 0 18px 44px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.04);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.toast-success {
+  border-color: rgba(16,185,129,.24);
+  color: #34d399;
+}
+
+.toast-error {
+  border-color: rgba(239,68,68,.26);
+  color: #f87171;
+}
+
+.toast-info {
+  border-color: rgba(56,189,248,.24);
+  color: #38bdf8;
+}
+
+.readiness-item {
+  @apply flex items-center justify-between gap-3 rounded-lg px-3 py-2.5;
+  background: rgba(255,255,255,.035);
+  border: 1px solid var(--border-light);
+}
+
+.readiness-dot {
+  @apply h-2.5 w-2.5 shrink-0 rounded-full;
+  box-shadow: 0 0 0 4px currentColor;
+}
+
+.admin-insight-panel {
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: var(--radius-lg);
+}
+
+.progress-track {
+  @apply h-2 overflow-hidden rounded-full;
+  background: rgba(255,255,255,.08);
+}
+
+.progress-fill {
+  @apply h-full rounded-full transition-all duration-500;
+  background: linear-gradient(90deg, #10b981, #38bdf8);
+}
 
 .glass {
   background: rgba(22,27,34,.72);
@@ -367,6 +481,58 @@ svg {
 .empty-state-text {
   @apply text-sm;
   color: var(--text-muted);
+}
+
+.admin-module-header {
+  @apply flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between;
+}
+
+.admin-module-icon {
+  @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-accent-500/20 bg-accent-500/10 text-accent-400;
+}
+
+.admin-toolbar {
+  @apply flex flex-col gap-3 md:flex-row md:items-center md:justify-between;
+}
+
+.skeleton-line {
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255,255,255,.055), rgba(255,255,255,.12), rgba(255,255,255,.055));
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite linear;
+}
+
+.dropdown-item-success {
+  color: #34d399;
+}
+
+.dropdown-item-success:hover {
+  background: rgba(16,185,129,.1);
+}
+
+.dropdown-item-warning {
+  color: #fbbf24;
+}
+
+.dropdown-item-warning:hover {
+  background: rgba(245,158,11,.1);
+}
+
+.dropdown-item-danger {
+  color: #f87171;
+}
+
+.dropdown-item-danger:hover {
+  background: rgba(239,68,68,.1);
+}
+
+.dropdown-item-info {
+  color: #38bdf8;
+}
+
+.dropdown-item-info:hover {
+  background: rgba(56,189,248,.1);
 }
 
 .tab-pill {

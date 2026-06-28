@@ -7,6 +7,8 @@ import Select from '../ui/Select';
 import Table, { EmptyRow } from '../ui/Table';
 import { masterDataApi } from '../../services/masterDataApi';
 import { useButtonGuard } from '../../hooks/useDebounce';
+import { ConfirmDialog, ToastViewport } from '../ui/Feedback';
+import { useConfirmDialog, useToasts } from '../../hooks/useUiFeedback';
 
 const SUB_TABS = ['Jurusan', 'Prodi', 'Kelas'];
 
@@ -16,10 +18,28 @@ export default function TabMasterData() {
   const [dataProdi, setDataProdi] = useState([]);
   const [dataKelas, setDataKelas] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const [formJurusan, setFormJurusan] = useState({ nama: '', singkatan: '' });
   const [formProdi, setFormProdi] = useState({ nama: '', jurusanId: '' });
   const [formKelas, setFormKelas] = useState({ nama_kelas: '', programStudiId: '' });
   const [, guardAction] = useButtonGuard(1200);
+  const { toasts, notify, dismissToast } = useToasts();
+  const { dialog, requestConfirm, closeConfirm } = useConfirmDialog();
+
+  const showMessage = useCallback((text) => {
+    setMessage(text);
+    setError('');
+    notify({ type: 'success', title: 'Berhasil', message: text });
+    setTimeout(() => setMessage(''), 3000);
+  }, [notify]);
+
+  const showError = useCallback((err, fallback) => {
+    const messageText = err?.response?.data?.error || fallback;
+    setError(messageText);
+    setMessage('');
+    notify({ type: 'error', title: 'Gagal', message: messageText });
+  }, [notify]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -32,36 +52,112 @@ export default function TabMasterData() {
         setDataKelas(await masterDataApi.getKelas());
         setDataProdi(await masterDataApi.getProgramStudi());
       }
-    } catch (error) { console.error(error); }
-  }, [activeSubTab]);
+    } catch (error) {
+      console.error(error);
+      showError(error, 'Gagal memuat data akademik');
+    }
+  }, [activeSubTab, showError]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    setError('');
+    setMessage('');
+    fetchData();
+  }, [fetchData]);
 
   const handleAddJurusan = guardAction(async () => {
-    try { setLoading(true); await masterDataApi.createJurusan(formJurusan); setFormJurusan({ nama: '', singkatan: '' }); fetchData(); }
-    catch { alert('Gagal menambah jurusan'); } finally { setLoading(false); }
+    if (!formJurusan.nama.trim()) {
+      setError('Nama jurusan wajib diisi');
+      return;
+    }
+    try {
+      setLoading(true);
+      await masterDataApi.createJurusan(formJurusan);
+      setFormJurusan({ nama: '', singkatan: '' });
+      showMessage('Jurusan berhasil ditambahkan');
+      fetchData();
+    } catch (err) {
+      showError(err, 'Gagal menambah jurusan');
+    } finally { setLoading(false); }
   });
   const handleDeleteJurusan = guardAction(async (id) => {
-    if (!confirm('Yakin hapus?')) return;
-    try { await masterDataApi.deleteJurusan(id); fetchData(); } catch { alert('Gagal hapus'); }
+    const confirmed = await requestConfirm({
+      title: 'Hapus jurusan?',
+      description: 'Data jurusan ini akan dihapus dari master akademik.',
+      confirmLabel: 'Hapus',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+    try {
+      await masterDataApi.deleteJurusan(id);
+      showMessage('Jurusan berhasil dihapus');
+      fetchData();
+    } catch (err) {
+      showError(err, 'Gagal hapus jurusan');
+    }
   });
 
   const handleAddProdi = guardAction(async () => {
-    try { setLoading(true); await masterDataApi.createProgramStudi(formProdi); setFormProdi({ nama: '', jurusanId: '' }); fetchData(); }
-    catch { alert('Gagal menambah prodi'); } finally { setLoading(false); }
+    if (!formProdi.jurusanId || !formProdi.nama.trim()) {
+      setError('Jurusan dan nama prodi wajib diisi');
+      return;
+    }
+    try {
+      setLoading(true);
+      await masterDataApi.createProgramStudi(formProdi);
+      setFormProdi({ nama: '', jurusanId: '' });
+      showMessage('Program studi berhasil ditambahkan');
+      fetchData();
+    } catch (err) {
+      showError(err, 'Gagal menambah prodi');
+    } finally { setLoading(false); }
   });
   const handleDeleteProdi = guardAction(async (id) => {
-    if (!confirm('Yakin hapus?')) return;
-    try { await masterDataApi.deleteProgramStudi(id); fetchData(); } catch { alert('Gagal hapus'); }
+    const confirmed = await requestConfirm({
+      title: 'Hapus program studi?',
+      description: 'Data program studi ini akan dihapus dari master akademik.',
+      confirmLabel: 'Hapus',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+    try {
+      await masterDataApi.deleteProgramStudi(id);
+      showMessage('Program studi berhasil dihapus');
+      fetchData();
+    } catch (err) {
+      showError(err, 'Gagal hapus prodi');
+    }
   });
 
   const handleAddKelas = guardAction(async () => {
-    try { setLoading(true); await masterDataApi.createKelas(formKelas); setFormKelas({ nama_kelas: '', programStudiId: '' }); fetchData(); }
-    catch { alert('Gagal menambah kelas'); } finally { setLoading(false); }
+    if (!formKelas.programStudiId || !formKelas.nama_kelas.trim()) {
+      setError('Prodi dan nama kelas wajib diisi');
+      return;
+    }
+    try {
+      setLoading(true);
+      await masterDataApi.createKelas(formKelas);
+      setFormKelas({ nama_kelas: '', programStudiId: '' });
+      showMessage('Kelas berhasil ditambahkan');
+      fetchData();
+    } catch (err) {
+      showError(err, 'Gagal menambah kelas');
+    } finally { setLoading(false); }
   });
   const handleDeleteKelas = guardAction(async (id) => {
-    if (!confirm('Yakin hapus?')) return;
-    try { await masterDataApi.deleteKelas(id); fetchData(); } catch { alert('Gagal hapus'); }
+    const confirmed = await requestConfirm({
+      title: 'Hapus kelas?',
+      description: 'Data kelas ini akan dihapus dari master akademik.',
+      confirmLabel: 'Hapus',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+    try {
+      await masterDataApi.deleteKelas(id);
+      showMessage('Kelas berhasil dihapus');
+      fetchData();
+    } catch (err) {
+      showError(err, 'Gagal hapus kelas');
+    }
   });
 
   return (
@@ -82,6 +178,17 @@ export default function TabMasterData() {
           ))}
         </div>
       </Card>
+
+      {message && (
+        <div className="p-3 rounded-xl text-sm font-medium" style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#34d399' }}>
+          {message}
+        </div>
+      )}
+      {error && (
+        <div className="p-3 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+          {error}
+        </div>
+      )}
 
       {activeSubTab === 'Jurusan' && (
         <Card>
@@ -219,7 +326,14 @@ export default function TabMasterData() {
             {dataKelas.map((k) => (
               <tr key={k.id}>
                 <td className="font-medium" style={{ color: 'var(--text-primary)' }}>{k.nama_kelas}</td>
-                <td style={{ color: 'var(--text-secondary)' }}>{k.programStudi?.nama}</td>
+                <td style={{ color: 'var(--text-secondary)' }}>
+                  {k.programStudi?.nama}
+                  {k._count?.users > 0 && (
+                    <span className="ml-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                      ({k._count.users} mahasiswa)
+                    </span>
+                  )}
+                </td>
                 <td className="text-right">
                   <Button variant="danger" size="sm" onClick={() => handleDeleteKelas(k.id)}>
                     <Trash2 size={14} />
@@ -231,6 +345,8 @@ export default function TabMasterData() {
           </Table>
         </Card>
       )}
+      <ToastViewport toasts={toasts} onDismiss={dismissToast} />
+      <ConfirmDialog dialog={dialog} onClose={closeConfirm} />
     </div>
   );
 }

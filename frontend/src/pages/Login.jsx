@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle, Eye, EyeOff, Loader2, Lock, LogIn, User } from 'lucide-react';
+import { AlertCircle, Camera, Eye, EyeOff, FileSpreadsheet, Loader2, Lock, LogIn, MapPinned, ShieldCheck, User } from 'lucide-react';
 import { useButtonGuard } from '../hooks/useDebounce';
 import { authApi } from '../services/authApi';
+import heroImage from '../assets/hero.png';
 
 export default function Login({ onLogin }) {
   const [username, setUsername] = useState('');
@@ -58,26 +59,40 @@ export default function Login({ onLogin }) {
       >
         <motion.section
           variants={item}
-          className="surface-hero hidden min-h-[560px] rounded-xl p-8 lg:flex lg:flex-col lg:justify-between"
+          className="surface-hero relative hidden min-h-[560px] overflow-hidden rounded-xl p-8 lg:flex lg:flex-col lg:justify-between"
         >
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-accent-500/25 bg-accent-500/10 text-accent-400">
-            <User size={24} strokeWidth={1.8} />
+          <img
+            src={heroImage}
+            alt="Dashboard Smart Attendance"
+            className="absolute inset-y-0 right-0 h-full w-[58%] object-cover opacity-20"
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(13,17,23,.98)_0%,rgba(13,17,23,.88)_44%,rgba(13,17,23,.42)_100%)]" />
+
+          <div className="relative inline-flex h-12 w-12 items-center justify-center rounded-xl border border-accent-500/25 bg-accent-500/10 text-accent-400 shadow-[inset_0_1px_0_rgba(255,255,255,.08)]">
+            <ShieldCheck size={24} strokeWidth={1.8} />
           </div>
 
-          <div className="max-w-xl">
-            <p className="mb-3 text-sm font-semibold uppercase text-accent-300">Absensi Apel</p>
+          <div className="relative max-w-xl">
+            <p className="mb-3 text-sm font-semibold uppercase text-accent-300">Absensi Apel MI Polinela</p>
             <h1 className="text-4xl font-bold leading-tight tracking-tight text-primary">
-              Smart Attendance
+              Presensi apel dengan bukti lokasi dan wajah.
             </h1>
             <p className="mt-4 max-w-[54ch] text-base leading-relaxed text-secondary">
-              Sistem absensi digital Manajemen Informatika untuk mahasiswa dan administrator.
+              Mahasiswa absen dengan GPS dan selfie langsung, admin memantau rekap kelas, izin, jadwal, dan titik apel dari satu dashboard.
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            {['Login aman', 'GPS aktif', 'Rekap cepat'].map((label) => (
+          <div className="relative grid grid-cols-[1.15fr_.85fr] gap-3">
+            {[
+              ['Radius GPS', 'Validasi titik apel', MapPinned],
+              ['Selfie langsung', 'Bukti kehadiran', Camera],
+              ['Rekap instan', 'Export PDF/Excel', FileSpreadsheet],
+              ['Role aman', 'Admin dan mahasiswa', User],
+            ].map(([label, desc, Icon]) => (
               <div key={label} className="surface-soft rounded-lg p-3">
-                <p className="text-xs font-semibold text-secondary">{label}</p>
+                <Icon size={16} className="mb-2 text-accent-400" />
+                <p className="text-xs font-semibold text-primary">{label}</p>
+                <p className="mt-1 text-[11px] leading-snug text-muted">{desc}</p>
               </div>
             ))}
           </div>

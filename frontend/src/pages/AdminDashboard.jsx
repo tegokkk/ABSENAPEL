@@ -1,17 +1,19 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Calendar, FileText, Clock, Layers, Users, Settings2,
+  Calendar, FileText, Clock, Users, Settings2,
   Download, Search, Plus, Navigation, MapPin,
-  Grid3X3, ChevronLeft, ChevronRight
+  Grid3X3, ChevronLeft, ChevronRight, BarChart3, Activity, ShieldCheck,
+  UserX, Trophy, ClipboardList, TrendingUp, Trash2, Edit3, KeyRound, Eye,
+  Power
 } from 'lucide-react';
 import { attendanceApi } from '../services/attendanceApi';
 import { usersApi } from '../services/usersApi';
 import { lokasiApi } from '../services/lokasiApi';
+import { izinApi } from '../services/izinApi';
 import ExcelJS from 'exceljs';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useDebounce, useButtonGuard } from '../hooks/useDebounce';
-import TabMasterData from '../components/admin/TabMasterData';
 import TabJadwal from '../components/admin/TabJadwal';
 import TabIzin from '../components/admin/TabIzin';
 
@@ -22,16 +24,36 @@ import Select from '../components/ui/Select';
 import Card, { CardHeader } from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Table from '../components/ui/Table';
+import { ConfirmDialog, ToastViewport } from '../components/ui/Feedback';
+import { useConfirmDialog, useToasts } from '../hooks/useUiFeedback';
+import { ActionDropdown, AdminEmptyState, AdminModuleHeader, AdminSkeletonRows } from '../components/ui/AdminPrimitives';
 
 const CLASSES = ['MI 4A', 'MI 4B', 'MI 4C', 'MI 4D'];
+
+function isSameLocalDay(value, targetDate = new Date()) {
+  const date = new Date(value);
+  return (
+    date.getDate() === targetDate.getDate() &&
+    date.getMonth() === targetDate.getMonth() &&
+    date.getFullYear() === targetDate.getFullYear()
+  );
+}
+
+function formatShortDate(value) {
+  return new Date(value).toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: 'short',
+  });
+}
 
 // ============================================================
 // TAB ABSENSI
 // ============================================================
-function TabAbsensi() {
+function TabAbsensi({ notify, requestConfirm }) {
   const [attendances, setAttendances] = useState([]);
   const [selectedKelas, setSelectedKelas] = useState('');
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
   const [deleting, setDeleting] = useState(null);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
 
@@ -40,11 +62,14 @@ function TabAbsensi() {
   const [, guardDeleteAttendance] = useButtonGuard(1200);
 
   const fetchAttendances = useCallback(async (kelas) => {
+    setFetching(true);
     try {
       const data = await attendanceApi.getAttendance({ kelas: kelas !== 'Semua Kelas' ? kelas : undefined });
       setAttendances(data);
     } catch (error) {
       console.error("Gagal mengambil data absensi:", error);
+    } finally {
+      setFetching(false);
     }
   }, []);
 
@@ -53,13 +78,20 @@ function TabAbsensi() {
   }, [debouncedKelas, fetchAttendances]);
 
   const handleDelete = guardDeleteAttendance(async (id) => {
-    if (!confirm('Yakin ingin menghapus data absensi ini?')) return;
+    const confirmed = await requestConfirm({
+      title: 'Hapus data absensi?',
+      description: 'Data absensi yang dihapus tidak dapat dikembalikan.',
+      confirmLabel: 'Hapus',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     setDeleting(id);
     try {
       await attendanceApi.deleteAttendance(id);
       fetchAttendances(debouncedKelas);
+      notify({ type: 'success', title: 'Data dihapus', message: 'Absensi berhasil dihapus dari rekap.' });
     } catch (err) {
-      alert(err.response?.data?.error || 'Gagal menghapus');
+      notify({ type: 'error', title: 'Gagal menghapus', message: err.response?.data?.error || 'Coba ulangi beberapa saat lagi.' });
     } finally {
       setDeleting(null);
     }
@@ -121,7 +153,7 @@ function TabAbsensi() {
       anchor.click();
       window.URL.revokeObjectURL(url);
     } catch {
-      alert('Gagal mengexport data');
+      notify({ type: 'error', title: 'Export gagal', message: 'Data Excel belum berhasil dibuat.' });
     } finally {
       setLoading(false);
     }
@@ -196,25 +228,33 @@ function TabAbsensi() {
       const fname = !selectedKelas || selectedKelas === 'Semua Kelas' ? 'Semua_Kelas' : selectedKelas.replace(' ', '_');
       doc.save(`absensi_${fname}_${new Date().toISOString().split('T')[0]}.pdf`);
     } catch {
-      alert('Gagal mengexport PDF');
+      notify({ type: 'error', title: 'Export gagal', message: 'PDF belum berhasil dibuat.' });
     }
   });
 
   const absensiHeaders = [
-    { label: 'No' },
-    { label: 'Mahasiswa' },
-    { label: 'Waktu' },
-    { label: 'Status' },
-    { label: 'Jarak' },
-    { label: 'Foto' },
-    { label: 'Lokasi' },
-    { label: 'Aksi', align: 'right' },
+    { label: 'No', width: '72px' },
+    { label: 'Mahasiswa', width: '25%' },
+    { label: 'Waktu', width: '13%' },
+    { label: 'Status', width: '12%' },
+    { label: 'Jarak', width: '12%' },
+    { label: 'Foto', width: '10%' },
+    { label: 'Lokasi', width: '14%' },
+    { label: 'Aksi', align: 'center', width: '112px' },
   ];
 
   return (
     <div className="space-y-4">
       <Card>
-        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        <AdminModuleHeader
+          title="Data Absensi"
+          description="Pantau kehadiran apel, bukti selfie, lokasi, dan export rekap kelas."
+          icon={Calendar}
+        />
+      </Card>
+
+      <Card className="p-4">
+        <div className="admin-toolbar">
           <div className="flex items-center w-full md:w-auto">
             <Select
               value={selectedKelas}
@@ -252,12 +292,118 @@ function TabAbsensi() {
         </div>
       </Card>
 
+      <div className="block md:hidden">
+        {fetching ? (
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <Card key={index} className="p-4">
+                <div className="skeleton-line mb-3 w-2/3" />
+                <div className="skeleton-line mb-3 w-1/2" />
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="skeleton-line w-full" />
+                  <div className="skeleton-line w-full" />
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : attendances.length === 0 ? (
+          <Card>
+            <AdminEmptyState
+              icon={Calendar}
+              title="Belum ada data absensi"
+              description="Data akan muncul setelah mahasiswa melakukan absensi apel sesuai jadwal."
+            />
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {attendances.map((a) => (
+              <Card key={a.id_absensi} className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-primary">{a.user.name}</p>
+                    <p className="mt-0.5 text-xs font-mono text-secondary">{a.user.npm || '-'} / {a.user.kelas || '-'}</p>
+                  </div>
+                  <Badge variant={a.status === 'TERLAMBAT' ? 'warning' : 'success'}>
+                    {a.status === 'TERLAMBAT' ? 'Terlambat' : 'Hadir'}
+                  </Badge>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-lg border border-[var(--border-light)] bg-white/[.025] p-2">
+                    <p className="text-muted">Tanggal</p>
+                    <p className="mt-1 font-medium text-primary">{new Date(a.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                  </div>
+                  <div className="rounded-lg border border-[var(--border-light)] bg-white/[.025] p-2">
+                    <p className="text-muted">Waktu</p>
+                    <p className="mt-1 font-mono text-secondary">{a.jam_absen ? new Date(a.jam_absen).toLocaleTimeString('id-ID') : '-'}</p>
+                  </div>
+                  <div className="rounded-lg border border-[var(--border-light)] bg-white/[.025] p-2">
+                    <p className="text-muted">Jarak</p>
+                    <p className="mt-1 font-mono text-secondary">{a.jarak_dari_titik != null ? `${a.jarak_dari_titik.toFixed(1)} m` : '-'}</p>
+                  </div>
+                  <div className="rounded-lg border border-[var(--border-light)] bg-white/[.025] p-2">
+                    <p className="text-muted">Bukti</p>
+                    <button
+                      type="button"
+                      onClick={() => a.foto_selfie && setSelectedPhoto(a.foto_selfie)}
+                      className="mt-1 text-xs font-semibold text-info-500 disabled:text-muted"
+                      disabled={!a.foto_selfie}
+                    >
+                      {a.foto_selfie ? 'Lihat foto' : 'Tidak ada'}
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {a.latitude != null && a.longitude != null ? (
+                    <a
+                      href={`https://www.google.com/maps?q=${a.latitude},${a.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-info-500/20 bg-info-500/10 px-3 text-xs font-semibold text-info-500"
+                    >
+                      <MapPin size={13} /> Maps
+                    </a>
+                  ) : (
+                    <span className="inline-flex min-h-9 items-center justify-center rounded-lg border border-[var(--border)] text-xs text-muted">Tanpa lokasi</span>
+                  )}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setSelectedPhoto(a.foto_selfie)}
+                    disabled={!a.foto_selfie}
+                  >
+                    <Eye size={13} /> Foto
+                  </Button>
+                  <ActionDropdown
+                    ariaLabel={`Aksi absensi ${a.user.name}`}
+                    items={[
+                      {
+                        label: deleting === a.id_absensi ? 'Menghapus...' : 'Hapus',
+                        icon: <Trash2 size={14} />,
+                        tone: 'dropdown-item-danger',
+                        disabled: deleting === a.id_absensi,
+                        onClick: () => handleDelete(a.id_absensi),
+                      },
+                    ]}
+                  />
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="hidden md:block">
       <Table headers={absensiHeaders}>
-        {attendances.length === 0 ? (
+        {fetching ? (
+          <AdminSkeletonRows rows={5} columns={absensiHeaders.length} />
+        ) : attendances.length === 0 ? (
           <tr>
-            <td colSpan={absensiHeaders.length} className="px-4 py-12 text-center" style={{ color: 'var(--text-muted)' }}>
-              <Calendar size={40} className="mx-auto mb-2 opacity-20" />
-              Belum ada data absensi.
+            <td colSpan={absensiHeaders.length}>
+              <AdminEmptyState
+                icon={Calendar}
+                title="Belum ada data absensi"
+                description="Gunakan filter kelas atau tunggu mahasiswa melakukan absensi apel."
+              />
             </td>
           </tr>
         ) : attendances.map((a, i) => (
@@ -325,22 +471,30 @@ function TabAbsensi() {
                 <span className="text-xs italic" style={{ color: 'var(--text-muted)' }}>Lokasi tidak tersedia</span>
               )}
             </td>
-            <td className="px-4 py-3 text-right">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleDelete(a.id_absensi)}
-                disabled={deleting === a.id_absensi}
-                style={{ color: '#f87171' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-              >
-                {deleting === a.id_absensi ? '...' : 'Hapus'}
-              </Button>
+            <td className="px-4 py-3 text-center action-cell">
+              <ActionDropdown
+                ariaLabel={`Aksi absensi ${a.user.name}`}
+                items={[
+                  a.foto_selfie && {
+                    label: 'Lihat foto',
+                    icon: <Eye size={14} />,
+                    tone: 'dropdown-item-info',
+                    onClick: () => setSelectedPhoto(a.foto_selfie),
+                  },
+                  {
+                    label: deleting === a.id_absensi ? 'Menghapus...' : 'Hapus',
+                    icon: <Trash2 size={14} />,
+                    tone: 'dropdown-item-danger',
+                    disabled: deleting === a.id_absensi,
+                    onClick: () => handleDelete(a.id_absensi),
+                  },
+                ]}
+              />
             </td>
           </tr>
         ))}
       </Table>
+      </div>
 
       {selectedPhoto && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.8)' }} onClick={() => setSelectedPhoto(null)}>
@@ -354,10 +508,11 @@ function TabAbsensi() {
 // ============================================================
 // TAB MANAJEMEN USER
 // ============================================================
-function TabUsers() {
+function TabUsers({ notify, requestConfirm }) {
   const [users, setUsers] = useState([]);
   const [filterKelas, setFilterKelas] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [fetching, setFetching] = useState(true);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
@@ -373,11 +528,14 @@ function TabUsers() {
   const [, guardAction] = useButtonGuard(1500);
 
   const fetchUsers = useCallback(async (kelas) => {
+    setFetching(true);
     try {
       const data = await usersApi.getUsers({ kelas: kelas !== 'Semua Kelas' ? kelas : undefined });
       setUsers(data);
     } catch (error) {
       console.error("Gagal mengambil data mahasiswa:", error);
+    } finally {
+      setFetching(false);
     }
   }, []);
 
@@ -426,9 +584,11 @@ function TabUsers() {
       if (editUser) {
         await usersApi.updateUser(editUser.id, form);
         setActionMsg('Data mahasiswa berhasil diperbarui');
+        notify({ type: 'success', title: 'Mahasiswa diperbarui', message: form.name });
       } else {
         await usersApi.createUser(form);
         setActionMsg('Mahasiswa berhasil ditambahkan');
+        notify({ type: 'success', title: 'Mahasiswa ditambahkan', message: form.name });
       }
       setShowModal(false);
       fetchUsers(debouncedFilterKelas);
@@ -441,40 +601,68 @@ function TabUsers() {
   });
 
   const handleDelete = guardAction(async (user) => {
-    if (!confirm(`Hapus mahasiswa "${user.name}"?\nSeluruh data absensinya juga akan dihapus.`)) return;
+    const confirmed = await requestConfirm({
+      title: 'Hapus mahasiswa?',
+      description: `Mahasiswa "${user.name}" dan seluruh data absensinya akan dihapus.`,
+      confirmLabel: 'Hapus',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     try {
       await usersApi.deleteUser(user.id);
       setActionMsg('Mahasiswa berhasil dihapus');
+      notify({ type: 'success', title: 'Mahasiswa dihapus', message: user.name });
       fetchUsers(debouncedFilterKelas);
       setTimeout(() => setActionMsg(''), 3000);
     } catch (err) {
-      alert(err.response?.data?.error || 'Gagal menghapus');
+      notify({ type: 'error', title: 'Gagal menghapus', message: err.response?.data?.error || 'Coba ulangi beberapa saat lagi.' });
     }
   });
 
   const handleResetPassword = guardAction(async (user) => {
-    if (!confirm(`Reset password "${user.name}" ke NPM (${user.npm})?`)) return;
+    const confirmed = await requestConfirm({
+      title: 'Reset password?',
+      description: `Password "${user.name}" akan dikembalikan ke NPM (${user.npm}).`,
+      confirmLabel: 'Reset',
+      variant: 'warning',
+    });
+    if (!confirmed) return;
     try {
       const data = await usersApi.resetPassword(user.id);
       setActionMsg(data.message);
+      notify({ type: 'success', title: 'Password direset', message: data.message });
       setTimeout(() => setActionMsg(''), 3000);
     } catch (err) {
-      alert(err.response?.data?.error || 'Gagal reset password');
+      notify({ type: 'error', title: 'Gagal reset password', message: err.response?.data?.error || 'Coba ulangi beberapa saat lagi.' });
     }
   });
 
   const userHeaders = [
-    { label: 'No' },
+    { label: 'No', width: '72px' },
     { label: 'Nama Mahasiswa' },
-    { label: 'NPM' },
-    { label: 'Kelas' },
-    { label: 'Aksi', align: 'right' },
+    { label: 'NPM', width: '18%' },
+    { label: 'Kelas', width: '14%' },
+    { label: 'Aksi', width: '120px' },
   ];
 
   return (
     <div className="space-y-5">
+      <Card>
+        <AdminModuleHeader
+          title="Manajemen Mahasiswa"
+          description="Kelola akun mahasiswa, kelas, dan reset password default NPM."
+          icon={Users}
+          action={
+            <Button variant="primary" size="md" onClick={openAdd} className="w-full justify-center sm:w-auto">
+              <Plus size={15} />
+              Tambah Mahasiswa
+            </Button>
+          }
+        />
+      </Card>
+
       <Card className="p-4">
-        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="admin-toolbar">
           <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto flex-1">
             <Select
               value={filterKelas}
@@ -503,11 +691,6 @@ function TabUsers() {
               />
             </div>
           </div>
-
-          <Button variant="primary" size="md" onClick={openAdd} className="w-full md:w-auto justify-center">
-            <Plus size={15} />
-            Tambah Mahasiswa
-          </Button>
         </div>
       </Card>
 
@@ -527,8 +710,21 @@ function TabUsers() {
         />
 
         <div className="block md:hidden">
-          {currentData.length === 0 ? (
-            <div className="p-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>Data mahasiswa tidak ditemukan.</div>
+          {fetching ? (
+            <div className="space-y-3 p-4">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="rounded-lg border border-[var(--border-light)] bg-white/[.025] p-4">
+                  <div className="skeleton-line mb-3 w-2/3" />
+                  <div className="skeleton-line w-1/3" />
+                </div>
+              ))}
+            </div>
+          ) : currentData.length === 0 ? (
+            <AdminEmptyState
+              icon={Users}
+              title="Data mahasiswa tidak ditemukan"
+              description="Coba ubah filter kelas atau kata kunci pencarian."
+            />
           ) : (
             <div className="divide-y divide-white/5">
               {currentData.map((u) => (
@@ -542,10 +738,15 @@ function TabUsers() {
                       {u.kelas || '-'}
                     </span>
                   </div>
-                  <div className="flex gap-2 w-full pt-2">
-                    <button onClick={() => openEdit(u)} className="flex-1 py-2 text-xs font-semibold rounded-lg" style={{ background: 'rgba(56,189,248,0.1)', color: '#38bdf8' }}>Edit</button>
-                    <button onClick={() => handleResetPassword(u)} className="flex-1 py-2 text-xs font-semibold rounded-lg" style={{ background: 'rgba(245,158,11,0.1)', color: '#fbbf24' }}>Reset PW</button>
-                    <button onClick={() => handleDelete(u)} className="flex-1 py-2 text-xs font-semibold rounded-lg" style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171' }}>Hapus</button>
+                  <div className="flex justify-end pt-2">
+                    <ActionDropdown
+                      ariaLabel={`Aksi mahasiswa ${u.name}`}
+                      items={[
+                        { label: 'Edit', icon: <Edit3 size={14} />, tone: 'dropdown-item-info', onClick: () => openEdit(u) },
+                        { label: 'Reset password', icon: <KeyRound size={14} />, tone: 'dropdown-item-warning', onClick: () => handleResetPassword(u) },
+                        { label: 'Hapus', icon: <Trash2 size={14} />, tone: 'dropdown-item-danger', onClick: () => handleDelete(u) },
+                      ]}
+                    />
                   </div>
                 </div>
               ))}
@@ -555,10 +756,16 @@ function TabUsers() {
 
         <div className="hidden md:block">
           <Table headers={userHeaders}>
-            {currentData.length === 0 ? (
+            {fetching ? (
+              <AdminSkeletonRows rows={5} columns={userHeaders.length} />
+            ) : currentData.length === 0 ? (
               <tr>
-                <td colSpan={userHeaders.length} className="px-5 py-12 text-center" style={{ color: 'var(--text-muted)' }}>
-                  Data mahasiswa tidak ditemukan.
+                <td colSpan={userHeaders.length}>
+                  <AdminEmptyState
+                    icon={Users}
+                    title="Data mahasiswa tidak ditemukan"
+                    description="Coba ubah filter kelas atau kata kunci pencarian."
+                  />
                 </td>
               </tr>
             ) : currentData.map((u, i) => (
@@ -573,12 +780,15 @@ function TabUsers() {
                     {u.kelas || '-'}
                   </span>
                 </td>
-                <td className="px-5 py-4">
-                  <div className="flex gap-2 justify-end">
-                    <button onClick={() => openEdit(u)} className="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all" style={{ background: 'rgba(56,189,248,0.1)', color: '#38bdf8' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(56,189,248,0.2)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(56,189,248,0.1)'}>Edit</button>
-                    <button onClick={() => handleResetPassword(u)} className="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all" style={{ background: 'rgba(245,158,11,0.1)', color: '#fbbf24' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(245,158,11,0.2)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(245,158,11,0.1)'}>Reset PW</button>
-                    <button onClick={() => handleDelete(u)} className="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all" style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.2)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}>Hapus</button>
-                  </div>
+                <td className="px-5 py-4 action-cell">
+                  <ActionDropdown
+                    ariaLabel={`Aksi mahasiswa ${u.name}`}
+                    items={[
+                      { label: 'Edit', icon: <Edit3 size={14} />, tone: 'dropdown-item-info', onClick: () => openEdit(u) },
+                      { label: 'Reset password', icon: <KeyRound size={14} />, tone: 'dropdown-item-warning', onClick: () => handleResetPassword(u) },
+                      { label: 'Hapus', icon: <Trash2 size={14} />, tone: 'dropdown-item-danger', onClick: () => handleDelete(u) },
+                    ]}
+                  />
                 </td>
               </tr>
             ))}
@@ -650,7 +860,7 @@ function TabUsers() {
 // ============================================================
 // TAB PENGATURAN — Lokasi Titik Apel + Pengaturan Waktu
 // ============================================================
-function TabSettings() {
+function TabSettings({ notify, requestConfirm }) {
   const [activeSubTab, setActiveSubTab] = useState('umum'); // 'umum' atau 'jadwal'
 
   const [locations, setLocations] = useState([]);
@@ -683,10 +893,12 @@ function TabSettings() {
     try {
       await lokasiApi.activateLokasi(id);
       setMsg('Lokasi berhasil diaktifkan');
+      notify({ type: 'success', title: 'Lokasi aktif', message: 'Titik apel aktif berhasil diperbarui.' });
       setTimeout(() => setMsg(''), 3000);
       fetchData();
     } catch (err) {
       setError(err.response?.data?.error || 'Gagal mengaktifkan lokasi');
+      notify({ type: 'error', title: 'Gagal mengaktifkan lokasi', message: err.response?.data?.error || 'Coba ulangi beberapa saat lagi.' });
     }
   });
 
@@ -720,15 +932,18 @@ function TabSettings() {
       if (editId) {
         await lokasiApi.updateLokasi(editId, form);
         setMsg('Lokasi berhasil diperbarui');
+        notify({ type: 'success', title: 'Lokasi diperbarui', message: form.nama_lokasi });
       } else {
         await lokasiApi.createLokasi(form);
         setMsg('Lokasi berhasil ditambahkan');
+        notify({ type: 'success', title: 'Lokasi ditambahkan', message: form.nama_lokasi });
       }
       setShowForm(false);
       setTimeout(() => setMsg(''), 3000);
       fetchData();
     } catch (err) {
       setFormError(err.response?.data?.error || 'Gagal menyimpan lokasi');
+      notify({ type: 'error', title: 'Gagal menyimpan lokasi', message: err.response?.data?.error || 'Coba ulangi beberapa saat lagi.' });
     } finally {
       setFormLoading(false);
     }
@@ -737,22 +952,39 @@ function TabSettings() {
   const handleDeleteLocation = guardAction(async (loc) => {
     if (loc.is_default) {
       setError('Lokasi default tidak dapat dihapus');
+      notify({ type: 'error', title: 'Lokasi default', message: 'Lokasi default tidak dapat dihapus.' });
       setTimeout(() => setError(''), 3000);
       return;
     }
-    if (!confirm(`Hapus lokasi "${loc.nama_lokasi}"?`)) return;
+    const confirmed = await requestConfirm({
+      title: 'Hapus lokasi?',
+      description: `Lokasi "${loc.nama_lokasi}" akan dihapus dari daftar titik apel.`,
+      confirmLabel: 'Hapus',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     try {
       await lokasiApi.deleteLokasi(loc.id);
       setMsg('Lokasi berhasil dihapus');
+      notify({ type: 'success', title: 'Lokasi dihapus', message: loc.nama_lokasi });
       setTimeout(() => setMsg(''), 3000);
       fetchData();
     } catch (err) {
       setError(err.response?.data?.error || 'Gagal menghapus lokasi');
+      notify({ type: 'error', title: 'Gagal menghapus lokasi', message: err.response?.data?.error || 'Coba ulangi beberapa saat lagi.' });
     }
   });
 
   return (
     <div className="space-y-6">
+      <Card>
+        <AdminModuleHeader
+          title="Pengaturan Sistem"
+          description="Atur titik lokasi apel, radius validasi, dan jadwal aktif yang dipakai mahasiswa."
+          icon={Settings2}
+        />
+      </Card>
+
       <div className="-mx-3 overflow-x-auto px-3 pb-2 hide-scrollbar sm:mx-0 sm:px-0">
         <nav className="flex min-w-max gap-2">
           <button onClick={() => setActiveSubTab('umum')} className={`tab-pill ${activeSubTab === 'umum' ? 'active' : ''}`}>
@@ -767,7 +999,7 @@ function TabSettings() {
       {activeSubTab === 'umum' ? (
         <div className="max-w-3xl space-y-6">
           <Card className="p-6">
-            <div className="flex items-center justify-between mb-4">
+            <div className="admin-module-header mb-4">
           <div>
             <h3 className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>Lokasi Titik Apel Aktif</h3>
             <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Pilih lokasi yang digunakan saat mahasiswa melakukan absen apel.</p>
@@ -816,20 +1048,30 @@ function TabSettings() {
                         <span>Radius: {loc.radius_meter}m</span>
                       </div>
                     </div>
-                    <div className="flex gap-1.5 shrink-0">
-                      {!isActive && (
-                        <Button variant="primary" size="sm" onClick={() => handleActivate(loc.id)}>
-                          Aktifkan
-                        </Button>
-                      )}
-                      <Button variant="ghost" size="sm" onClick={() => openEditForm(loc)} style={{ color: '#38bdf8' }}>
-                        Edit
-                      </Button>
-                      {!loc.is_default && (
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteLocation(loc)} style={{ color: '#f87171' }}>
-                          Hapus
-                        </Button>
-                      )}
+                    <div className="shrink-0">
+                      <ActionDropdown
+                        ariaLabel={`Aksi lokasi ${loc.nama_lokasi}`}
+                        items={[
+                          !isActive && {
+                            label: 'Aktifkan',
+                            icon: <Power size={14} />,
+                            tone: 'dropdown-item-success',
+                            onClick: () => handleActivate(loc.id),
+                          },
+                          {
+                            label: 'Edit',
+                            icon: <Edit3 size={14} />,
+                            tone: 'dropdown-item-info',
+                            onClick: () => openEditForm(loc),
+                          },
+                          !loc.is_default && {
+                            label: 'Hapus',
+                            icon: <Trash2 size={14} />,
+                            tone: 'dropdown-item-danger',
+                            onClick: () => handleDeleteLocation(loc),
+                          },
+                        ]}
+                      />
                     </div>
                   </div>
                 </div>
@@ -900,7 +1142,7 @@ function TabSettings() {
       </div>
         </div>
       ) : (
-        <TabJadwal />
+        <TabJadwal notify={notify} requestConfirm={requestConfirm} />
       )}
     </div>
   );
@@ -912,6 +1154,14 @@ function TabSettings() {
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('absensi');
   const [stats, setStats] = useState({ totalToday: 0, hadir: 0, terlambat: 0, byKelas: {} });
+  const [insights, setInsights] = useState({
+    belumAbsen: 0,
+    izinPending: 0,
+    kelasTeraktif: '-',
+    trend7Hari: [],
+  });
+  const { toasts, notify, dismissToast } = useToasts();
+  const { dialog, requestConfirm, closeConfirm } = useConfirmDialog();
 
   const fetchStats = useCallback(async () => {
     try {
@@ -922,43 +1172,175 @@ export default function AdminDashboard() {
     }
   }, []);
 
+  const fetchDashboardInsights = useCallback(async () => {
+    try {
+      const [attendances, users, izins] = await Promise.all([
+        attendanceApi.getAttendance(),
+        usersApi.getUsers(),
+        izinApi.getIzins(),
+      ]);
+
+      const todayAttendances = attendances.filter((item) => isSameLocalDay(item.tanggal));
+      const attendedUserIds = new Set(todayAttendances.map((item) => item.user?.id ?? item.user_id));
+      const mahasiswaUsers = users.filter((item) => item.role !== 'ADMIN');
+      const belumAbsen = mahasiswaUsers.filter((item) => !attendedUserIds.has(item.id)).length;
+      const izinPending = izins.filter((item) => item.status === 'PENDING').length;
+
+      const classCounts = todayAttendances.reduce((acc, item) => {
+        const kelas = item.user?.kelas || 'Tanpa Kelas';
+        acc[kelas] = (acc[kelas] || 0) + 1;
+        return acc;
+      }, {});
+      const kelasTeraktif = Object.entries(classCounts)
+        .sort((a, b) => b[1] - a[1])[0]?.[0] || '-';
+
+      const trend7Hari = Array.from({ length: 7 }).map((_, index) => {
+        const date = new Date();
+        date.setDate(date.getDate() - (6 - index));
+        const dayItems = attendances.filter((item) => isSameLocalDay(item.tanggal, date));
+        return {
+          label: formatShortDate(date),
+          hadir: dayItems.filter((item) => item.status !== 'TERLAMBAT').length,
+          terlambat: dayItems.filter((item) => item.status === 'TERLAMBAT').length,
+          total: dayItems.length,
+        };
+      });
+
+      setInsights({ belumAbsen, izinPending, kelasTeraktif, trend7Hari });
+    } catch (error) {
+      console.error('Gagal mengambil insight dashboard:', error);
+    }
+  }, []);
+
   useEffect(() => {
     fetchStats();
-  }, [activeTab, fetchStats]);
+    fetchDashboardInsights();
+  }, [activeTab, fetchStats, fetchDashboardInsights]);
 
   const tabs = [
     { id: 'absensi', label: 'Data Absensi', icon: <Calendar size={16} /> },
     { id: 'izin', label: 'Validasi Izin', icon: <FileText size={16} /> },
-    { id: 'master', label: 'Data Akademik', icon: <Layers size={16} /> },
     { id: 'users', label: 'Mahasiswa', icon: <Users size={16} /> },
     { id: 'settings', label: 'Pengaturan', icon: <Settings2 size={16} /> },
   ];
 
+  const classStats = useMemo(() => {
+    const entries = Object.entries(stats.byKelas || {});
+    if (entries.length === 0) {
+      return CLASSES.map((kelas) => ({ kelas, total: 0, percent: 0 }));
+    }
+    const maxTotal = Math.max(...entries.map(([, value]) => Number(value) || 0), 1);
+    return entries.map(([kelas, value]) => ({
+      kelas,
+      total: Number(value) || 0,
+      percent: Math.min(100, Math.round(((Number(value) || 0) / maxTotal) * 100)),
+    }));
+  }, [stats.byKelas]);
+
+  const attendanceRate = stats.totalToday > 0
+    ? Math.round((stats.hadir / stats.totalToday) * 100)
+    : 0;
+  const maxTrendTotal = Math.max(...insights.trend7Hari.map((item) => item.total), 1);
+
   return (
     <div className="space-y-6">
       {/* Header Dashboard */}
-      <div className="surface-hero rounded-xl p-4 sm:p-6">
-        <div className="mb-5 flex min-w-0 items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-accent-500/25 bg-accent-500/10 text-accent-400 sm:h-12 sm:w-12">
-            <Grid3X3 size={24} />
+      <div className="surface-hero overflow-hidden rounded-xl p-4 sm:p-6">
+        <div className="grid gap-5 lg:grid-cols-[1.1fr_.9fr]">
+          <div className="flex min-w-0 flex-col justify-between gap-6">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-accent-500/25 bg-accent-500/10 text-accent-400 sm:h-12 sm:w-12">
+                <Grid3X3 size={24} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase text-accent-300/80">Command Center</p>
+                <h1 className="mt-1 truncate text-2xl font-bold tracking-tight text-primary sm:text-3xl">Dashboard Admin</h1>
+                <p className="mt-1 text-sm text-secondary">Monitoring apel Manajemen Informatika secara cepat dan terukur.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {[
+                ['Total Hari Ini', stats.totalToday, Activity, 'text-accent-400'],
+                ['Tepat Waktu', stats.hadir, ShieldCheck, 'text-success-500'],
+                ['Terlambat', stats.terlambat, Clock, 'text-warning-500'],
+              ].map(([label, value, Icon, tone]) => (
+                <div key={label} className="admin-insight-panel p-4">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase text-secondary">{label}</p>
+                    <Icon size={17} className={tone} />
+                  </div>
+                  <p className="font-mono text-3xl font-bold text-primary">{value}</p>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-bold text-primary">Dashboard Admin</h1>
-            <p className="mt-0.5 truncate text-sm text-accent-300/80">Smart Attendance - Manajemen Informatika</p>
+
+          <div className="admin-insight-panel p-4">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold text-primary">Progress Per Kelas</p>
+                <p className="mt-0.5 text-xs text-muted">Rasio hadir tepat waktu: {attendanceRate}%</p>
+              </div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-info-500/20 bg-info-500/10 text-info-500">
+                <BarChart3 size={20} />
+              </div>
+            </div>
+            <div className="space-y-3">
+              {classStats.map((item) => (
+                <div key={item.kelas}>
+                  <div className="mb-1.5 flex items-center justify-between text-xs">
+                    <span className="font-semibold text-secondary">{item.kelas}</span>
+                    <span className="font-mono text-primary">{item.total}</span>
+                  </div>
+                  <div className="progress-track">
+                    <div className="progress-fill" style={{ width: `${item.percent}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
           {[
-            ['Total Absen Hari Ini', stats.totalToday],
-            ['Hadir Tepat Waktu', stats.hadir],
-            ['Terlambat', stats.terlambat],
-          ].map(([label, value]) => (
-            <div key={label} className="rounded-lg border border-accent-500/15 bg-white/[.025] p-4">
-              <p className="mb-1 text-sm font-medium text-accent-300/75">{label}</p>
-              <p className="text-3xl font-bold text-primary">{value}</p>
+            ['Belum Absen', insights.belumAbsen, UserX, 'text-warning-500'],
+            ['Izin Pending', insights.izinPending, ClipboardList, 'text-warning-500'],
+            ['Kelas Teraktif', insights.kelasTeraktif, Trophy, 'text-accent-400'],
+            ['Tren 7 Hari', `${insights.trend7Hari.reduce((sum, item) => sum + item.total, 0)} absen`, TrendingUp, 'text-info-500'],
+          ].map(([label, value, Icon, tone]) => (
+            <div key={label} className="admin-insight-panel p-4">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase text-secondary">{label}</p>
+                <Icon size={16} className={tone} />
+              </div>
+              <p className="truncate font-mono text-xl font-bold text-primary">{value}</p>
             </div>
           ))}
+        </div>
+
+        <div className="admin-insight-panel mt-3 p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold text-primary">Tren Hadir dan Terlambat</p>
+              <p className="mt-0.5 text-xs text-muted">Ringkasan 7 hari terakhir dari rekap absensi.</p>
+            </div>
+            <TrendingUp size={18} className="text-info-500" />
+          </div>
+          <div className="grid grid-cols-7 gap-2">
+            {insights.trend7Hari.map((item) => (
+              <div key={item.label} className="flex min-w-0 flex-col items-center gap-2">
+                <div className="flex h-20 w-full items-end justify-center rounded-lg border border-[var(--border-light)] bg-white/[.025] px-1 pb-1">
+                  <div
+                    className="w-full rounded-md bg-accent-500/70"
+                    style={{ height: `${Math.max(8, (item.total / maxTrendTotal) * 100)}%` }}
+                    title={`${item.total} absen, ${item.terlambat} terlambat`}
+                  />
+                </div>
+                <span className="truncate text-[10px] font-mono text-muted">{item.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -981,12 +1363,13 @@ export default function AdminDashboard() {
 
       {/* Content */}
       <div>
-        {activeTab === 'absensi' && <TabAbsensi />}
-        {activeTab === 'izin' && <TabIzin />}
-        {activeTab === 'master' && <TabMasterData />}
-        {activeTab === 'users' && <TabUsers />}
-        {activeTab === 'settings' && <TabSettings />}
+        {activeTab === 'absensi' && <TabAbsensi notify={notify} requestConfirm={requestConfirm} />}
+        {activeTab === 'izin' && <TabIzin notify={notify} requestConfirm={requestConfirm} />}
+        {activeTab === 'users' && <TabUsers notify={notify} requestConfirm={requestConfirm} />}
+        {activeTab === 'settings' && <TabSettings notify={notify} requestConfirm={requestConfirm} />}
       </div>
+      <ToastViewport toasts={toasts} onDismiss={dismissToast} />
+      <ConfirmDialog dialog={dialog} onClose={closeConfirm} />
     </div>
   );
 }
