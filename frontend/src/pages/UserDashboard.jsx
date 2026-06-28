@@ -221,7 +221,7 @@ export default function UserDashboard({ user }) {
         foto_selfie: imgSrc,
       };
       const res = await attendanceApi.submitApel(payload);
-      const status = res.data.status;
+      const status = res.status;
       setMessage({
         type: 'success',
         text:
