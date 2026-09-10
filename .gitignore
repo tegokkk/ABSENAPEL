@@ -1,5 +1,8 @@
 # Archive (file lama/backup, tidak perlu di-push)
-archive/
+archive/*
+!archive/frontend/
+archive/frontend/*
+!archive/frontend/AdminDashboard_backup.jsx
 
 # Logs
 logs

@@ -1,18 +1,16 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback, useId } from 'react';
 import { attendanceApi } from '../services/attendanceApi';
 import { izinApi } from '../services/izinApi';
 import { settingsApi } from '../services/settingsApi';
-import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import Webcam from 'react-webcam';
-import L from 'leaflet';
-import { useDebounceCallback, useButtonGuard } from '../hooks/useDebounce';
+import { useButtonGuard } from '../hooks/useDebounce';
+import { useCurrentLocation } from '../hooks/useCurrentLocation';
+import SelfieCamera from '../components/attendance/SelfieCamera';
+import AttendanceLocation from '../components/attendance/AttendanceLocation';
+import AttendanceHistory from '../components/attendance/AttendanceHistory';
+import { isSameWibDay } from '../utils/dateTime';
 import {
-  Camera,
-  RotateCcw,
   CheckCircle2,
   CalendarCheck,
-  MapPin,
   Crosshair,
   AlertCircle,
   FileText,
@@ -30,13 +28,6 @@ import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
 import { ToastViewport } from '../components/ui/Feedback';
 import { useToasts } from '../hooks/useUiFeedback';
-
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
 
 function parseBrowserInfo() {
   const ua = navigator.userAgent;
@@ -78,8 +69,7 @@ function calculateDistanceMeters(from, to) {
 }
 
 export default function UserDashboard({ user }) {
-  const [location, setLocation] = useState(null);
-  const [locationError, setLocationError] = useState('');
+  const { location, locationError, locating, getLocation } = useCurrentLocation();
   const [attendances, setAttendances] = useState([]);
   const [izins, setIzins] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -92,25 +82,12 @@ export default function UserDashboard({ user }) {
   });
   const { toasts, notify, dismissToast } = useToasts();
 
-  const webcamRef = useRef(null);
-  const captureLockRef = useRef(false);
   const [imgSrc, setImgSrc] = useState(null);
-  const [captureLocked, setCaptureLocked] = useState(false);
+  const izinDescriptionId = useId();
+  const izinAttachmentId = useId();
 
   const [absenLocked, guardAbsen] = useButtonGuard(3000);
   const [, guardIzin] = useButtonGuard(1500);
-
-  const capture = useCallback(() => {
-    if (captureLockRef.current) return;
-    captureLockRef.current = true;
-    setCaptureLocked(true);
-    const imageSrc = webcamRef.current?.getScreenshot();
-    if (imageSrc) setImgSrc(imageSrc);
-    setTimeout(() => {
-      captureLockRef.current = false;
-      setCaptureLocked(false);
-    }, 800);
-  }, []);
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -125,7 +102,7 @@ export default function UserDashboard({ user }) {
   const [formIzin, setFormIzin] = useState({
     tanggal_awal: '',
     tanggal_akhir: '',
-    jenis_izin: 'Sakit',
+    jenis_izin: 'SAKIT',
     keterangan: '',
     lampiran_url: null,
   });
@@ -134,6 +111,7 @@ export default function UserDashboard({ user }) {
 
   const handleLampiranChange = (e) => {
     const file = e.target.files[0];
+    e.target.value = '';
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
       notify({ type: 'error', title: 'File terlalu besar', message: 'Maksimal ukuran lampiran adalah 5MB.' });
@@ -157,8 +135,12 @@ export default function UserDashboard({ user }) {
   }, []);
 
   const submitIzin = guardIzin(async () => {
-    if (!formIzin.tanggal_awal || !formIzin.tanggal_akhir || !formIzin.keterangan) {
+    if (!formIzin.tanggal_awal || !formIzin.tanggal_akhir || !formIzin.keterangan.trim()) {
       notify({ type: 'error', title: 'Form belum lengkap', message: 'Tanggal dan keterangan izin wajib diisi.' });
+      return;
+    }
+    if (formIzin.tanggal_akhir < formIzin.tanggal_awal) {
+      notify({ type: 'error', title: 'Tanggal tidak valid', message: 'Tanggal akhir izin tidak boleh sebelum tanggal awal.' });
       return;
     }
     try {
@@ -168,41 +150,19 @@ export default function UserDashboard({ user }) {
       setFormIzin({
         tanggal_awal: '',
         tanggal_akhir: '',
-        jenis_izin: 'Sakit',
+        jenis_izin: 'SAKIT',
         keterangan: '',
         lampiran_url: null,
       });
       setLampiranPreview(null);
       fetchIzins();
       notify({ type: 'success', title: 'Izin dikirim', message: 'Pengajuan izin berhasil dibuat.' });
-    } catch {
-      notify({ type: 'error', title: 'Gagal mengajukan izin', message: 'Coba ulangi beberapa saat lagi.' });
+    } catch (error) {
+      notify({ type: 'error', title: 'Gagal mengajukan izin', message: error.response?.data?.message || error.response?.data?.error || 'Coba ulangi beberapa saat lagi.' });
     } finally {
       setIzinLoading(false);
     }
   });
-
-  const _getLocationRaw = useCallback(() => {
-    if (!navigator.geolocation) {
-      setLocationError('Geolocation tidak didukung oleh browser ini.');
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-          timestamp: position.timestamp,
-        });
-        setLocationError('');
-      },
-      () => setLocationError('Gagal mendapatkan lokasi. Pastikan izin lokasi aktif.'),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
-    );
-  }, []);
-
-  const getLocation = useDebounceCallback(_getLocationRaw, 800);
 
   const fetchAttendances = useCallback(async () => {
     try {
@@ -216,9 +176,8 @@ export default function UserDashboard({ user }) {
   useEffect(() => {
     fetchAttendances();
     fetchIzins();
-    getLocation();
     fetchSettings();
-  }, [fetchAttendances, fetchIzins, fetchSettings, getLocation]);
+  }, [fetchAttendances, fetchIzins, fetchSettings]);
 
   const _doAbsen = async () => {
     if (!location) {
@@ -269,17 +228,8 @@ export default function UserDashboard({ user }) {
 
   const handleAbsenApel = guardAbsen(_doAbsen);
 
-  const todayRecord = attendances.find((a) => {
-    const d = new Date(a.tanggal);
-    const today = new Date();
-    return (
-      d.getDate() === today.getDate() &&
-      d.getMonth() === today.getMonth() &&
-      d.getFullYear() === today.getFullYear()
-    );
-  });
+  const todayRecord = attendances.find((attendance) => isSameWibDay(attendance.tanggal));
 
-  const officeCoord = [settings.OFFICE_LAT, settings.OFFICE_LON];
   const distanceFromOffice = calculateDistanceMeters(
     location,
     { lat: settings.OFFICE_LAT, lng: settings.OFFICE_LON },
@@ -301,7 +251,7 @@ export default function UserDashboard({ user }) {
     },
     {
       label: 'Akurasi GPS',
-      value: location?.accuracy ? `${location.accuracy.toFixed(0)} m` : '-',
+      value: location?.accuracy != null ? `${location.accuracy.toFixed(0)} m` : '-',
       ready: Boolean(location && location.accuracy <= 100),
       tone: gpsQuality.variant === 'danger' ? 'text-danger-500' : gpsQuality.variant === 'warning' ? 'text-warning-500' : 'text-accent-400',
     },
@@ -382,43 +332,7 @@ export default function UserDashboard({ user }) {
         </Card>
 
         {/* Kamera Selfie */}
-        <Card>
-          <CardHeader title="Verifikasi Wajah" />
-          <div
-            className="relative rounded-xl overflow-hidden aspect-video mb-4"
-            style={{ background: 'var(--bg-base)', border: '1px solid var(--border)' }}
-          >
-            {!imgSrc ? (
-              <Webcam
-                audio={false}
-                ref={webcamRef}
-                screenshotFormat="image/jpeg"
-                className="w-full h-full object-cover"
-                videoConstraints={{ facingMode: 'user' }}
-              />
-            ) : (
-              <img src={imgSrc} alt="Selfie" className="w-full h-full object-cover" />
-            )}
-          </div>
-          {!imgSrc ? (
-            <Button id="btn-capture" onClick={capture} disabled={captureLocked} variant="secondary" className="w-full" size="lg">
-              <Camera size={17} />
-              Ambil Foto
-            </Button>
-          ) : (
-            <Button
-              id="btn-retake"
-              onClick={() => setImgSrc(null)}
-              variant="ghost"
-              className="w-full"
-              size="lg"
-            >
-              <RotateCcw size={17} />
-              Ulangi Foto
-            </Button>
-          )}
-        </Card>
-
+        <SelfieCamera image={imgSrc} onCapture={setImgSrc} onRetake={() => setImgSrc(null)} />
         {/* Aksi Absensi */}
         <Card>
           <CardHeader title="Aksi Absensi" />
@@ -500,7 +414,7 @@ export default function UserDashboard({ user }) {
                       : '#34d399',
                   }}
                 >
-                  {location.accuracy ? `±${location.accuracy.toFixed(0)}m` : 'N/A'}
+                  {location.accuracy != null ? `±${location.accuracy.toFixed(0)}m` : 'N/A'}
                 </span>
                 {location.accuracy > 100 && (
                   <span style={{ color: '#f87171' }} className="ml-1">(terlalu rendah)</span>
@@ -514,178 +428,14 @@ export default function UserDashboard({ user }) {
       {/* ===== KOLOM KANAN ===== */}
       <div className="lg:col-span-2 space-y-4">
 
-        {/* Peta Lokasi */}
-        <Card>
-          <CardHeader
-            title="Lokasi Saat Ini"
-            action={
-              <Button id="btn-refresh-location" onClick={getLocation} variant="secondary" size="sm">
-                <MapPin size={13} />
-                Perbarui
-              </Button>
-            }
-          />
-
-          {locationError && (
-            <div
-              className="p-3 rounded-lg text-sm"
-              style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}
-            >
-              {locationError}
-            </div>
-          )}
-
-          <div
-            className="relative z-0 h-72 overflow-hidden rounded-xl sm:h-80"
-            style={{ border: '1px solid var(--border)', background: 'var(--bg-base)' }}
-          >
-            {location ? (
-              <MapContainer
-                center={[location.lat, location.lng]}
-                zoom={16}
-                style={{ height: '100%', width: '100%' }}
-              >
-                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                <Marker position={[location.lat, location.lng]}>
-                  <Popup>Lokasi Anda</Popup>
-                </Marker>
-                <Circle
-                  center={officeCoord}
-                  pathOptions={{
-                    color: '#10b981',
-                    fillColor: '#10b981',
-                    fillOpacity: 0.15,
-                  }}
-                  radius={settings.MAX_RADIUS}
-                />
-                <Marker position={officeCoord}>
-                  <Popup>Lokasi Apel</Popup>
-                </Marker>
-              </MapContainer>
-            ) : (
-              <div
-                className="flex flex-col items-center justify-center h-full gap-2"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                <MapPin size={30} strokeWidth={1.5} />
-                <span className="text-sm">Memuat lokasi...</span>
-              </div>
-            )}
-          </div>
-
-          {/* Koordinat tiles */}
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-            {[
-              { label: 'Latitude', value: location?.lat?.toFixed(6) || '-' },
-              { label: 'Longitude', value: location?.lng?.toFixed(6) || '-' },
-              { label: 'Akurasi', value: location?.accuracy ? `±${location.accuracy.toFixed(0)}m` : '-' },
-            ].map(({ label, value }) => (
-              <div
-                key={label}
-                className="rounded-lg p-2.5 text-center"
-                style={{ background: 'var(--bg-base)', border: '1px solid var(--border)' }}
-              >
-                <p className="text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>{label}</p>
-                <p className="text-xs font-mono font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                  {value}
-                </p>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Riwayat Absensi */}
-        <Card>
-          <CardHeader title="Riwayat Absensi" />
-          <div className="block md:hidden">
-            {attendances.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-state-icon"><CalendarCheck size={20} /></div>
-                <p className="empty-state-text">Belum ada riwayat absensi.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {attendances.map((a) => (
-                  <div key={a.id_absensi} className="rounded-lg border border-[var(--border-light)] bg-white/[.025] p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-primary">
-                          {new Date(a.tanggal).toLocaleDateString('id-ID', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric',
-                          })}
-                        </p>
-                        <p className="mt-1 text-xs font-mono text-secondary">
-                          {a.jam_absen ? new Date(a.jam_absen).toLocaleTimeString('id-ID') : '-'}
-                        </p>
-                      </div>
-                      <Badge variant={a.status === 'TERLAMBAT' ? 'warning' : 'success'}>
-                        {a.status === 'TERLAMBAT' ? 'Terlambat' : 'Hadir'}
-                      </Badge>
-                    </div>
-                    {a.foto_selfie && (
-                      <a href={a.foto_selfie} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex text-xs font-semibold text-accent-400">
-                        Lihat foto selfie
-                      </a>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="hidden md:block">
-          <Table
-            headers={[
-              { label: 'Tanggal' },
-              { label: 'Waktu Absen' },
-              { label: 'Status' },
-              { label: 'Foto' },
-            ]}
-          >
-            {attendances.length === 0 ? (
-              <EmptyRow colSpan={4} message="Belum ada riwayat absensi." />
-            ) : (
-              attendances.map((a) => (
-                <tr key={a.id_absensi}>
-                  <td className="font-medium" style={{ color: 'var(--text-primary)' }}>
-                    {new Date(a.tanggal).toLocaleDateString('id-ID', {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
-                  </td>
-                  <td className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    {a.jam_absen ? new Date(a.jam_absen).toLocaleTimeString('id-ID') : '-'}
-                  </td>
-                  <td>
-                    <Badge variant={a.status === 'TERLAMBAT' ? 'warning' : 'success'}>
-                      {a.status === 'TERLAMBAT' ? 'Terlambat' : 'Hadir'}
-                    </Badge>
-                  </td>
-                  <td>
-                    {a.foto_selfie ? (
-                      <a href={a.foto_selfie} target="_blank" rel="noopener noreferrer">
-                        <img
-                          src={a.foto_selfie}
-                          alt="Selfie"
-                          className="w-10 h-10 rounded-xl object-cover cursor-pointer hover:scale-110 transition-transform"
-                          style={{ border: '2px solid var(--border)' }}
-                          onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(16,185,129,0.5)'}
-                          onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
-                        />
-                      </a>
-                    ) : (
-                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </Table>
-          </div>
-        </Card>
-
+        <AttendanceLocation
+          location={location}
+          error={locationError}
+          locating={locating}
+          onRefresh={getLocation}
+          settings={settings}
+        />
+        <AttendanceHistory attendances={attendances} />
         {/* Riwayat Izin */}
         <Card>
           <CardHeader
@@ -759,7 +509,7 @@ export default function UserDashboard({ user }) {
           setFormIzin({
             tanggal_awal: '',
             tanggal_akhir: '',
-            jenis_izin: 'Sakit',
+            jenis_izin: 'SAKIT',
             keterangan: '',
             lampiran_url: null,
           });
@@ -777,6 +527,7 @@ export default function UserDashboard({ user }) {
             <Input
               label="Sampai Tanggal"
               type="date"
+              min={formIzin.tanggal_awal || undefined}
               value={formIzin.tanggal_akhir}
               onChange={(e) => setFormIzin({ ...formIzin, tanggal_akhir: e.target.value })}
             />
@@ -786,13 +537,14 @@ export default function UserDashboard({ user }) {
             value={formIzin.jenis_izin}
             onChange={(e) => setFormIzin({ ...formIzin, jenis_izin: e.target.value })}
           >
-            <option value="Sakit">Sakit</option>
-            <option value="Izin">Izin (Keperluan Lain)</option>
-            <option value="Surat Tugas">Surat Tugas / Kegiatan Kampus</option>
+            <option value="SAKIT">Sakit</option>
+            <option value="IZIN">Izin (Keperluan Lain)</option>
+            <option value="CUTI">Surat Tugas / Kegiatan Kampus</option>
           </Select>
           <div className="space-y-1.5">
-            <label className="form-label">Keterangan / Alasan</label>
+            <label htmlFor={izinDescriptionId} className="form-label">Keterangan / Alasan</label>
             <textarea
+              id={izinDescriptionId}
               rows="2"
               className="form-input"
               placeholder="Berikan keterangan jelas"
@@ -803,15 +555,14 @@ export default function UserDashboard({ user }) {
 
           {/* Upload Bukti */}
           <div className="space-y-1.5">
-            <label className="form-label">
+            <label htmlFor={izinAttachmentId} className="form-label">
               Bukti Pendukung
               <span className="ml-1 font-normal" style={{ color: 'var(--text-muted)' }}>
                 (Surat sakit, surat tugas, dll.)
               </span>
             </label>
-            <label
-              htmlFor="upload-lampiran"
-              className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed rounded-xl cursor-pointer transition-all group"
+            <div
+              className="relative flex flex-col items-center justify-center w-full h-28 border-2 border-dashed rounded-xl cursor-pointer transition-all group focus-within:ring-2 focus-within:ring-accent-500/50"
               style={{
                 borderColor: 'rgba(16,185,129,0.25)',
                 background: 'rgba(16,185,129,0.04)',
@@ -819,6 +570,13 @@ export default function UserDashboard({ user }) {
               onMouseEnter={e => e.currentTarget.style.background = 'rgba(16,185,129,0.08)'}
               onMouseLeave={e => e.currentTarget.style.background = 'rgba(16,185,129,0.04)'}
             >
+              <input
+                id={izinAttachmentId}
+                type="file"
+                accept="image/*"
+                className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+                onChange={handleLampiranChange}
+              />
               {lampiranPreview ? (
                 <div className="relative w-full h-full flex items-center justify-center p-2">
                   <img
@@ -828,12 +586,13 @@ export default function UserDashboard({ user }) {
                   />
                   <button
                     type="button"
+                    aria-label="Hapus lampiran"
                     onClick={(e) => {
                       e.preventDefault();
                       setLampiranPreview(null);
                       setFormIzin((p) => ({ ...p, lampiran_url: null }));
                     }}
-                    className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold"
+                    className="absolute z-20 top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold"
                     style={{ background: '#ef4444', color: '#fff' }}
                   >
                     <X size={11} />
@@ -849,14 +608,7 @@ export default function UserDashboard({ user }) {
                   <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>JPG, PNG, maks. 5MB</span>
                 </div>
               )}
-            </label>
-            <input
-              id="upload-lampiran"
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleLampiranChange}
-            />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 gap-2 pt-2 sm:grid-cols-2">
@@ -869,7 +621,7 @@ export default function UserDashboard({ user }) {
                 setFormIzin({
                   tanggal_awal: '',
                   tanggal_akhir: '',
-                  jenis_izin: 'Sakit',
+                  jenis_izin: 'SAKIT',
                   keterangan: '',
                   lampiran_url: null,
                 });

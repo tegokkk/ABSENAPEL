@@ -15,6 +15,14 @@ const STATUS_MAP = {
   PENDING: { variant: 'warning', label: 'Menunggu' },
 };
 
+const JENIS_IZIN_LABEL = {
+  SAKIT: 'Sakit',
+  IZIN: 'Izin',
+  CUTI: 'Surat Tugas',
+};
+
+const getJenisLabel = (jenis) => JENIS_IZIN_LABEL[jenis?.toUpperCase()] || jenis || '-';
+
 export default function TabIzin({ notify, requestConfirm }) {
   const [data, setData] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
@@ -120,7 +128,7 @@ export default function TabIzin({ notify, requestConfirm }) {
                       </div>
                       <div className="rounded-lg border border-[var(--border-light)] bg-white/[.025] p-2">
                         <p className="text-muted">Jenis dan keterangan</p>
-                        <p className="mt-1 font-semibold text-primary">{i.jenis_izin}</p>
+                        <p className="mt-1 font-semibold text-primary">{getJenisLabel(i.jenis_izin)}</p>
                         <p className="mt-1 text-secondary">{i.keterangan}</p>
                       </div>
                     </div>
@@ -147,7 +155,7 @@ export default function TabIzin({ notify, requestConfirm }) {
                             tone: 'dropdown-item-danger',
                             onClick: () => handleUpdateStatus(i.id, 'REJECTED'),
                           },
-                          i.status === 'APPROVED' && {
+                          (i.status === 'APPROVED' || i.status === 'REJECTED') && {
                             label: 'Hapus',
                             icon: <Trash2 size={14} />,
                             tone: 'dropdown-item-danger',
@@ -194,7 +202,7 @@ export default function TabIzin({ notify, requestConfirm }) {
                   {new Date(i.tanggal_awal).toLocaleDateString('id-ID')} - {new Date(i.tanggal_akhir).toLocaleDateString('id-ID')}
                 </td>
                 <td className="izin-cell">
-                  <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{i.jenis_izin}</span>
+                  <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{getJenisLabel(i.jenis_izin)}</span>
                   <p className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--text-secondary)' }}>{i.keterangan}</p>
                 </td>
                 <td className="izin-cell">
@@ -225,7 +233,7 @@ export default function TabIzin({ notify, requestConfirm }) {
                         tone: 'dropdown-item-danger',
                         onClick: () => handleUpdateStatus(i.id, 'REJECTED'),
                       },
-                      i.status === 'APPROVED' && {
+                      (i.status === 'APPROVED' || i.status === 'REJECTED') && {
                         label: 'Hapus',
                         icon: <Trash2 size={14} />,
                         tone: 'dropdown-item-danger',

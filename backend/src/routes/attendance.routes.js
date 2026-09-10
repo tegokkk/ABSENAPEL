@@ -3,6 +3,8 @@ const router = express.Router();
 const prisma = require('../utils/prisma');
 const { authMiddleware, adminOnly } = require('../middlewares/auth');
 const { getDistance, getClientIP } = require('../utils/helpers');
+const { ValidationError, validateGps, validateLocation, validateSelfie } = require('../utils/validation');
+const { getWibDayBounds } = require('../utils/dateTime');
 
 // =============================================
 // ATTENDANCE — ABSEN APEL (dengan Anti-Fake GPS)
@@ -28,23 +30,14 @@ router.post(
         gps_timestamp,
         browser,
         platform,
-      } = req.body;
+      } = req.body || {};
       if (latitude === undefined || latitude === null || longitude === undefined || longitude === null || accuracy === undefined || accuracy === null) {
         return res.status(400).json({ success: false, message: "Koordinat atau akurasi tidak lengkap. Pastikan GPS aktif." });
       }
 
-      const lat = parseFloat(latitude);
-      const lon = parseFloat(longitude);
-      const acc = parseFloat(accuracy);
-      const gpsTs = gps_timestamp ? parseFloat(gps_timestamp) : null;
-
-      if (isNaN(lat) || isNaN(lon) || isNaN(acc)) {
-        return res.status(400).json({ success: false, message: "Format koordinat atau akurasi tidak valid." });
-      }
-
-      if (acc > 100) {
-        return res.status(400).json({ success: false, message: "Akurasi GPS terlalu rendah. Silakan aktifkan GPS akurasi tinggi." });
-      }
+      const { latitude: lat, longitude: lon, accuracy: acc, gps_timestamp: gpsTs } =
+        validateGps({ latitude, longitude, accuracy, gps_timestamp });
+      const fotoPath = await validateSelfie(req.body.foto_selfie);
 
       // Cek jadwal aktif
       const nowTime = new Date();
@@ -80,11 +73,6 @@ router.post(
           .json({ success: false, message: "Anda sudah melakukan absen untuk jadwal apel ini." });
       }
 
-      if (!req.body.foto_selfie) {
-        return res.status(400).json({ success: false, message: "Foto selfie wajib disertakan" });
-      }
-
-      const fotoPath = req.body.foto_selfie; // Base64 string from frontend
       const isLate = nowTime > (activeJadwal.batas_terlambat || activeJadwal.waktu_mulai);
       const clientIP = getClientIP(req);
 
@@ -96,13 +84,14 @@ router.post(
          return res.status(400).json({ success: false, message: "Lokasi aktif admin belum dipilih atau tidak valid." });
       }
 
-      const adminLat = parseFloat(activeLocation.latitude);
-      const adminLon = parseFloat(activeLocation.longitude);
-      const adminRadius = parseFloat(activeLocation.radius_meter);
-
-      if (isNaN(adminLat) || isNaN(adminLon) || isNaN(adminRadius)) {
-        return res.status(400).json({ success: false, message: "Koordinat lokasi aktif admin tidak valid." });
+      let location;
+      try {
+        location = validateLocation(activeLocation);
+      } catch (error) {
+        if (!(error instanceof ValidationError)) throw error;
+        return res.status(400).json({ success: false, message: `Lokasi aktif admin tidak valid. ${error.message}` });
       }
+      const { latitude: adminLat, longitude: adminLon, radius_meter: adminRadius } = location;
 
       // Hitung jarak menggunakan Haversine
       const distance = getDistance(lat, lon, adminLat, adminLon);
@@ -159,6 +148,9 @@ router.post(
         status 
       });
     } catch (error) {
+      if (error instanceof ValidationError) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
       console.error("[ATTENDANCE ERROR]", error);
       if (error.code === "P2002") {
         return res
@@ -236,14 +228,10 @@ router.get(
   adminOnly,
   async (req, res) => {
     try {
-      // Gunakan tengah malam WIB (UTC+7) sebagai awal hari — bukan UTC midnight
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      // Offset WIB: kurangi 7 jam untuk mendapat batas UTC yang sesuai
-      today.setTime(today.getTime() - (7 * 60 * 60 * 1000));
+      const { start, end } = getWibDayBounds();
 
       const todayAttendances = await prisma.attendance.findMany({
-        where: { tanggal: { gte: today } },
+        where: { tanggal: { gte: start, lt: end } },
         include: { user: { select: { kelas: true } } },
       });
 

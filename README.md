@@ -181,9 +181,16 @@ Jalankan `npm run seed` dari folder `backend` untuk membuat data awal.
 
 | Role | Username | Password |
 | --- | --- | --- |
-| Admin | `TIMDIS1` | `TIMDIS1` |
-| Admin | `TIMDIS2` | `TIMDIS2` |
+| Admin | `TIMDIS1` | `APEL123` |
+| Admin | `TIMDIS2` | `APEL123` |
 | Mahasiswa | nama mahasiswa dari seed | NPM masing-masing |
+
+Untuk database yang sudah terisi, reset password admin tanpa menghapus data lain:
+
+```bash
+cd backend
+npm run reset:admin
+```
 
 Untuk production, ganti password default dan gunakan `JWT_SECRET` yang kuat.
 
@@ -280,7 +287,7 @@ npm run check:admin
 - Dokumentasi API lengkap ada di `docs/API.md`.
 - Dokumentasi database ada di `docs/DATABASE.md`.
 - Foto selfie dan lampiran izin diproses melalui backend.
-- Jika login admin gagal, jalankan `npm run seed` atau `npm run reset:admin`.
+- Jika login admin gagal, jalankan `npm run reset:admin` untuk mengembalikan password admin ke `APEL123`.
 - Jika absensi gagal, pastikan browser memberi izin akses lokasi dan kamera.
 
 ## Deployment

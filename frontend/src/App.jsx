@@ -1,9 +1,10 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
-import UserDashboard from './pages/UserDashboard';
-import AdminDashboard from './pages/AdminDashboard';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { LogOut, UsersRound } from 'lucide-react';
+
+const UserDashboard = lazy(() => import('./pages/UserDashboard'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 
 function App() {
   const [user, setUser] = useState(null);
@@ -74,6 +75,7 @@ function App() {
                 <button
                   onClick={handleLogout}
                   id="btn-logout"
+                  aria-label="Logout"
                   className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-danger-500/20 bg-danger-500/10 px-3 text-xs font-semibold text-danger-500 transition hover:bg-danger-500/15 active:scale-[.98]"
                 >
                   <LogOut size={14} />
@@ -86,6 +88,7 @@ function App() {
 
         {/* Content */}
         <main className={user ? 'app-main' : ''}>
+          <Suspense fallback={<p role="status" className="p-6 text-center text-secondary">Memuat halaman...</p>}>
           <Routes>
             <Route
               path="/"
@@ -109,6 +112,7 @@ function App() {
               }
             />
           </Routes>
+          </Suspense>
         </main>
       </div>
     </Router>

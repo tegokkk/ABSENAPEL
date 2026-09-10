@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../utils/prisma');
 const { authMiddleware, adminOnly } = require('../middlewares/auth');
+const { ValidationError, validateLocation, validateLocationName } = require('../utils/validation');
 
 // =============================================
 // LOKASI ABSEN — CRUD (Admin Only)
@@ -23,29 +24,15 @@ router.get("/api/lokasi", authMiddleware, async (req, res) => {
 // POST tambah lokasi baru
 router.post("/api/lokasi", authMiddleware, adminOnly, async (req, res) => {
   try {
-    const { nama_lokasi, latitude, longitude, radius_meter } = req.body;
-
-    if (!nama_lokasi || latitude === undefined || longitude === undefined) {
-      return res
-        .status(400)
-        .json({ error: "Nama lokasi, latitude, dan longitude wajib diisi" });
-    }
-
-    const lat = parseFloat(latitude);
-    const lon = parseFloat(longitude);
-    const radius = radius_meter ? parseFloat(radius_meter) : 100;
-
-    if (isNaN(lat) || isNaN(lon) || isNaN(radius) || radius <= 0) {
-      return res.status(400).json({ error: "Koordinat atau radius lokasi tidak valid" });
-    }
+    const { nama_lokasi, latitude, longitude, radius_meter = 100 } = req.body || {};
+    const name = validateLocationName(nama_lokasi);
+    const coordinates = validateLocation({ latitude, longitude, radius_meter });
 
     const location = await prisma.$transaction(async (tx) => {
       const created = await tx.lokasiAbsen.create({
         data: {
-          nama_lokasi: nama_lokasi.trim(),
-          latitude: lat,
-          longitude: lon,
-          radius_meter: radius,
+          nama_lokasi: name,
+          ...coordinates,
         },
       });
 
@@ -65,6 +52,7 @@ router.post("/api/lokasi", authMiddleware, adminOnly, async (req, res) => {
       location,
     });
   } catch (error) {
+    if (error instanceof ValidationError) return res.status(400).json({ error: error.message });
     console.error("[LOKASI CREATE ERROR]", error);
     res.status(500).json({ error: "Server error" });
   }
@@ -74,7 +62,7 @@ router.post("/api/lokasi", authMiddleware, adminOnly, async (req, res) => {
 router.put("/api/lokasi/:id", authMiddleware, adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
-    const { nama_lokasi, latitude, longitude, radius_meter } = req.body;
+    const { nama_lokasi, latitude, longitude, radius_meter } = req.body || {};
 
     const existing = await prisma.lokasiAbsen.findUnique({
       where: { id: parseInt(id) },
@@ -84,18 +72,13 @@ router.put("/api/lokasi/:id", authMiddleware, adminOnly, async (req, res) => {
     }
 
     const updateData = {};
-    if (nama_lokasi) updateData.nama_lokasi = nama_lokasi.trim();
-    if (latitude !== undefined) updateData.latitude = parseFloat(latitude);
-    if (longitude !== undefined) updateData.longitude = parseFloat(longitude);
-    if (radius_meter !== undefined) updateData.radius_meter = parseFloat(radius_meter);
-
-    if (
-      (updateData.latitude !== undefined && isNaN(updateData.latitude)) ||
-      (updateData.longitude !== undefined && isNaN(updateData.longitude)) ||
-      (updateData.radius_meter !== undefined && (isNaN(updateData.radius_meter) || updateData.radius_meter <= 0))
-    ) {
-      return res.status(400).json({ error: "Koordinat atau radius lokasi tidak valid" });
-    }
+    if (nama_lokasi !== undefined) updateData.nama_lokasi = validateLocationName(nama_lokasi);
+    const coordinates = validateLocation({
+      latitude: latitude === undefined ? existing.latitude : latitude,
+      longitude: longitude === undefined ? existing.longitude : longitude,
+      radius_meter: radius_meter === undefined ? existing.radius_meter : radius_meter,
+    });
+    Object.assign(updateData, coordinates);
 
     const location = await prisma.lokasiAbsen.update({
       where: { id: parseInt(id) },
@@ -104,6 +87,7 @@ router.put("/api/lokasi/:id", authMiddleware, adminOnly, async (req, res) => {
 
     res.json({ message: "Lokasi berhasil diperbarui", location });
   } catch (error) {
+    if (error instanceof ValidationError) return res.status(400).json({ error: error.message });
     console.error("[LOKASI UPDATE ERROR]", error);
     res.status(500).json({ error: "Server error" });
   }
@@ -161,6 +145,8 @@ router.put("/api/lokasi/:id/activate", authMiddleware, adminOnly, async (req, re
       return res.status(404).json({ error: "Lokasi tidak ditemukan" });
     }
 
+    validateLocation(existing);
+
     await prisma.$transaction(async (tx) => {
       await tx.lokasiAbsen.updateMany({
         where: { is_active: true },
@@ -175,6 +161,7 @@ router.put("/api/lokasi/:id/activate", authMiddleware, adminOnly, async (req, re
 
     res.json({ message: `Lokasi "${existing.nama_lokasi}" diaktifkan` });
   } catch (error) {
+    if (error instanceof ValidationError) return res.status(400).json({ error: error.message });
     console.error("[LOKASI ACTIVATE ERROR]", error);
     res.status(500).json({ error: "Server error" });
   }

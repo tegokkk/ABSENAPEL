@@ -17,7 +17,7 @@ export function useToasts() {
     };
 
     setToasts((items) => [...items, nextToast].slice(-4));
-    window.setTimeout(() => dismissToast(id), toast.duration || 3600);
+    window.setTimeout(() => dismissToast(id), toast.duration || 4500);
     return id;
   }, [dismissToast]);
 

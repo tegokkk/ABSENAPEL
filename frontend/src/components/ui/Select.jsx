@@ -1,13 +1,21 @@
-import { forwardRef } from 'react';
+import { forwardRef, useId } from 'react';
 import clsx from 'clsx';
 
 const Select = forwardRef(
-  ({ label, error, helperText, children, className, ...props }, ref) => {
+  ({ label, error, helperText, children, className, id, 'aria-describedby': describedBy, 'aria-invalid': invalid, ...props }, ref) => {
+    const generatedId = useId();
+    const inputId = id ?? generatedId;
+    const messageId = `${inputId}-message`;
+    const description = [describedBy, (error || helperText) && messageId].filter(Boolean).join(' ') || undefined;
+
     return (
       <div className="min-w-0 space-y-1.5">
-        {label && <label className="form-label">{label}</label>}
+        {label && <label htmlFor={inputId} className="form-label">{label}</label>}
         <select
           ref={ref}
+          id={inputId}
+          aria-describedby={description}
+          aria-invalid={error ? true : invalid}
           className={clsx(
             'form-select',
             error && '!border-danger-500 focus:!shadow-[0_0_0_3px_rgba(239,68,68,.12)]',
@@ -17,8 +25,8 @@ const Select = forwardRef(
         >
           {children}
         </select>
-        {error && <p className="text-xs text-danger-500">{error}</p>}
-        {helperText && !error && <p className="text-muted text-xs">{helperText}</p>}
+        {error && <p id={messageId} className="text-xs text-danger-500">{error}</p>}
+        {helperText && !error && <p id={messageId} className="text-muted text-xs">{helperText}</p>}
       </div>
     );
   },

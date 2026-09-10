@@ -7,7 +7,7 @@ async function main() {
   const user = await prisma.user.findUnique({ where: { username: 'TIMDIS1' } });
   if (!user) { console.log('User TIMDIS1 tidak ditemukan!'); return; }
   
-  const testPasswords = ['TIMDIS1', 'timdis1', 'admin', 'password', '123456'];
+  const testPasswords = ['APEL123', 'TIMDIS1', 'TIMDIS2', 'admin', 'password', '123456'];
   for (const pw of testPasswords) {
     const match = await bcrypt.compare(pw, user.password);
     console.log(`  "${pw}" => ${match ? '✅ MATCH!' : '❌ tidak cocok'}`);

@@ -74,8 +74,8 @@ async function main() {
   // 5. Admin
   console.log("👔 Membuat akun admin...");
   const admins = [
-    { username: "TIMDIS1", password: "TIMDIS1", name: "Admin TIMDIS 1" },
-    { username: "TIMDIS2", password: "TIMDIS2", name: "Admin TIMDIS 2" },
+    { username: "TIMDIS1", password: "APEL123", name: "Admin TIMDIS 1" },
+    { username: "TIMDIS2", password: "APEL123", name: "Admin TIMDIS 2" },
   ];
   for (const admin of admins) {
     const hashedPw = await bcrypt.hash(admin.password, 10);
